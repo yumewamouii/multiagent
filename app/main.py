@@ -7,123 +7,226 @@ from sqlalchemy.orm import Session
 from app import models, schemas, services
 from app.db import Base, engine, get_db
 
-app = FastAPI(title="Multi-agent Backend", version="0.4.1")
+
+app = FastAPI(
+    title="Multi-agent Backend",
+    version="0.5.0",
+)
+
 
 app.state.ingestion_task = None
 app.state.ingestion_stop_event = asyncio.Event()
 
 
+# ---------------------------
+# DB init
+# ---------------------------
+
+
 @app.on_event("startup")
 def init_db() -> None:
+
     if engine.dialect.name == "postgresql":
+
         with engine.begin() as connection:
-            connection.execute(text("CREATE EXTENSION IF NOT EXISTS vector"))
+
+            connection.execute(
+                text(
+                    "CREATE EXTENSION IF NOT EXISTS vector"
+                )
+            )
+
     Base.metadata.create_all(bind=engine)
 
 
+# ---------------------------
+# background ingestion
+# ---------------------------
+
+
 @app.on_event("startup")
-async def start_background_ingestion() -> None:
+async def start_background_ingestion():
+
     app.state.ingestion_stop_event.clear()
+
     app.state.ingestion_task = asyncio.create_task(
-        services.run_continuous_ingestion(app.state.ingestion_stop_event)
+        services.run_continuous_ingestion(
+            app.state.ingestion_stop_event
+        )
     )
 
-
 @app.on_event("shutdown")
-async def stop_background_ingestion() -> None:
+async def stop_background_ingestion():
+
     task = app.state.ingestion_task
+
     if task is None:
         return
 
     app.state.ingestion_stop_event.set()
+
     await task
+
     app.state.ingestion_task = None
+
+
+# ---------------------------
+# health
+# ---------------------------
 
 
 @app.get("/health")
 def healthcheck():
+
     return {"status": "ok"}
 
 
-@app.post("/sources", response_model=schemas.SourceRead)
-def create_source(payload: schemas.SourceCreate, db: Session = Depends(get_db)):
-    exists = db.scalar(select(models.Source).where(models.Source.name == payload.name))
+# ---------------------------
+# sources
+# ---------------------------
+
+
+@app.post(
+    "/sources",
+    response_model=schemas.SourceRead,
+)
+def create_source(
+    payload: schemas.SourceCreate,
+    db: Session = Depends(get_db),
+):
+
+    exists = db.scalar(
+        select(models.Source).where(
+            models.Source.name == payload.name
+        )
+    )
+
     if exists:
-        raise HTTPException(status_code=400, detail="source already exists")
-    source = models.Source(**payload.model_dump())
+
+        raise HTTPException(
+            status_code=400,
+            detail="source already exists",
+        )
+
+    source = models.Source(
+        **payload.model_dump()
+    )
+
     db.add(source)
+
     db.commit()
+
     db.refresh(source)
+
     return source
 
 
-@app.post("/reviews/ingest", response_model=schemas.ReviewRead)
-def ingest_review(payload: schemas.ReviewIngest, db: Session = Depends(get_db)):
-    source = db.get(models.Source, payload.source_id)
-    if not source:
-        raise HTTPException(status_code=404, detail="source not found")
-
-    review = models.Review(**payload.model_dump())
-    db.add(review)
-    db.commit()
-    db.refresh(review)
-
-    services.create_knowledge_chunk(db, review)
-    return review
+# ---------------------------
+# manual review ingest
+# ---------------------------
 
 
-@app.post("/reviews/ingest-html", response_model=schemas.ReviewRead)
-def ingest_review_html(payload: schemas.ReviewHtmlIngest, db: Session = Depends(get_db)):
-    source = db.get(models.Source, payload.source_id)
-    if not source:
-        raise HTTPException(status_code=404, detail="source not found")
+@app.post(
+    "/reviews/ingest",
+    response_model=schemas.ReviewRead,
+)
+def ingest_review(
+    payload: schemas.ReviewIngest,
+    db: Session = Depends(get_db),
+):
 
-    ai_result = services.parse_html_with_gigachat(payload.html_page)
-    review = models.Review(
-        source_id=payload.source_id,
-        external_id=payload.external_id,
-        product_name=payload.product_name,
-        author=payload.author,
-        rating=float(ai_result["rating"]),
-        body=str(ai_result["review_text"]),
+    source = db.get(
+        models.Source,
+        payload.source_id,
     )
+
+    if not source:
+
+        raise HTTPException(
+            status_code=404,
+            detail="source not found",
+        )
+
+    review = models.Review(
+        **payload.model_dump()
+    )
+
     db.add(review)
+
     db.commit()
+
     db.refresh(review)
 
     services.create_knowledge_chunk(
         db,
         review,
-        sentiment=str(ai_result["sentiment"]),
-        summary=str(ai_result["summary"]),
-        tags=str(ai_result["tags"]),
+        sentiment="neutral",
+        summary=review.body[:200],
+        tags="manual",
     )
+
     return review
 
 
-@app.post("/agents", response_model=schemas.AgentRead)
-def create_agent(payload: schemas.AgentCreate, db: Session = Depends(get_db)):
-    exists = db.scalar(select(models.AgentProfile).where(models.AgentProfile.name == payload.name))
-    if exists:
-        raise HTTPException(status_code=400, detail="agent already exists")
+# ---------------------------
+# agents
+# ---------------------------
 
-    agent = models.AgentProfile(**payload.model_dump())
+
+@app.post(
+    "/agents",
+    response_model=schemas.AgentRead,
+)
+def create_agent(
+    payload: schemas.AgentCreate,
+    db: Session = Depends(get_db),
+):
+
+    exists = db.scalar(
+        select(models.AgentProfile).where(
+            models.AgentProfile.name
+            == payload.name
+        )
+    )
+
+    if exists:
+
+        raise HTTPException(
+            status_code=400,
+            detail="agent already exists",
+        )
+
+    agent = models.AgentProfile(
+        **payload.model_dump()
+    )
+
     db.add(agent)
+
     db.commit()
+
     db.refresh(agent)
+
     return agent
 
 
-@app.get("/knowledge/search", response_model=list[schemas.KnowledgeSearchResult])
-def search_knowledge(query: str = Query(min_length=2), db: Session = Depends(get_db)):
-    rows = services.search_knowledge(db, query)
+# ---------------------------
+# knowledge search
+# ---------------------------
+
+
+@app.get("/knowledge/search")
+async def search_knowledge(query: str = Query(min_length=2), top_k: int = 5):
+    # вызываем вашу асинхронную функцию поиска
+    results = await services.search_chunks(query, top_k=top_k)
+
+    # возвращаем удобный для клиента формат
     return [
-        schemas.KnowledgeSearchResult(
-            review_id=review.id,
-            product_name=review.product_name,
-            summary=chunk.summary,
-            sentiment=chunk.sentiment,
-            tags=chunk.tags,
-        )
-        for chunk, review in rows
+        {
+            "review_id": chunk.review_id,
+            "summary": chunk.summary,
+            "sentiment": chunk.sentiment,
+            "tags": chunk.tags,
+            "review text": chunk.review.body # если нужно вернуть
+        }
+        for chunk in results
     ]

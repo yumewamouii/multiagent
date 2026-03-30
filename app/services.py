@@ -1,173 +1,453 @@
 import asyncio
 import os
-from datetime import datetime
-from urllib.error import URLError
-from urllib.request import Request, urlopen
+
+
+import json
+import re
+
+
+import numpy as np
+
 
 from sqlalchemy import select
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, selectinload
+
 
 from app import models
 from app.db import SessionLocal
+
+from app.parsers.wildberries.crawler import get_product_ids
+from app.parsers.wildberries.parser import parse_product
+
+from app.gigachat import gigachat_request
+
+
+from app.ai.embedding import create_embedding
+
+
+from app.models import KnowledgeChunk
+
+
+import logging
+
+logging.basicConfig(
+    level = logging.INFO,
+    format = "%(asctime)s | %(levelname)s | %(message)s",
+)
+
+log = logging.getLogger(__name__)
+
+
+# ---------------------------
+# utils
+# ---------------------------
+
+def is_valid_review_text(text: str) -> bool:
+    if not text:
+        return False
+
+    text = text.strip()
+
+    if len(text) < 5:
+        return False
+
+    if text.lower() in {"-", ".", "👍"}:
+        return False
+
+    return True
 
 
 def summarize_review(text: str, max_chars: int = 220) -> str:
     return text[:max_chars].strip()
 
 
+'''
 def create_embedding(text: str) -> list[float] | None:
-    """
-    Placeholder for GigaChat embeddings integration.
-    In production, call GigaChat embeddings API and return a 1536-dim vector.
-    """
+
+    if not text:
+        return None
+
     if not os.getenv("GIGACHAT_API_KEY"):
         return None
-    return None
+
+    try:
+
+        data = {
+            "model": "Embeddings",
+            "input": text,
+        }
+
+        result = gigachat_request(
+            "embeddings",
+            data,
+        )
+
+        embedding = result["data"][0]["embedding"]
+
+        return embedding
+
+    except Exception as e:
+
+        log.warning(f"embedding error: {e}")
+
+        return None
+'''
+# ---------------------------
+# GIGACHAT
+# ---------------------------
 
 
+def extract_json(text: str) -> dict | None:
+
+    # ищем {...}
+    match = re.search(r"\{.*\}", text, re.DOTALL)
+
+    if not match:
+        return None
+
+    json_str = match.group(0)
+
+    try:
+        return json.loads(json_str)
+    except Exception:
+        return None
 
 
-def fetch_html_page(url: str, timeout_sec: int = 20) -> str:
-    """
-    Выполняет GET-запрос к странице и возвращает её HTML.
-    """
-    request = Request(url, headers={"User-Agent": "Mozilla/5.0 (compatible; multiagent-bot/1.0)"})
-    with urlopen(request, timeout=timeout_sec) as response:  # nosec B310
-        charset = response.headers.get_content_charset() or "utf-8"
-        return response.read().decode(charset, errors="replace")
+def analyze_review_with_gigachat(text: str) -> dict:
 
-
-def fetch_html_pages(urls: list[str]) -> list[str]:
-    pages: list[str] = []
-    for url in urls:
-        try:
-            pages.append(fetch_html_page(url))
-        except (TimeoutError, URLError, ValueError):
-            continue
-    return pages
-
-def parse_html_with_gigachat(html_page: str) -> dict[str, str | float]:
-    """
-    Здесь должна быть интеграция с GigaChat:
-    вход: HTML страницы отзыва/листинга
-    выход: review_text, rating, sentiment, summary, tags.
-    """
     if not os.getenv("GIGACHAT_API_KEY"):
         return {
-            "review_text": "GigaChat API key not configured: demo extracted review text.",
-            "rating": 3.0,
-            "sentiment": "neutral",
-            "summary": "Demo summary extracted from HTML by placeholder.",
-            "tags": "demo,html,gigachat",
+            "rating": 4,
+            "sentiment": "",
+            "summary": text[:200],
+            "tags": "",
+        }
+
+    prompt = f"""
+Проанализируй отзыв и верни ТОЛЬКО JSON. Без текста. Без объяснений. Без markdown.
+Формат:
+{{
+  "rating": int,
+  "sentiment": str,
+  "summary": str,
+  "tags": list
+}}
+Отзыв:
+{text}
+"""
+    data = {
+        "model": "GigaChat",
+        "messages": [
+            {"role": "user", "content": prompt}
+        ],
+        "temperature": 0.2,
+    }
+    result = gigachat_request("chat/completions", data)
+
+    content = result["choices"][0]["message"]["content"]
+
+    parsed = extract_json(content)
+
+    if not parsed:
+        log.warning(f"GIGACHAT BAD JSON: {content}")
+
+        return {
+            "rating": 4,
+            "sentiment": "",
+            "summary": content[:200],
+            "tags": "",
         }
 
     return {
-        "review_text": "GigaChat extracted review text from HTML.",
-        "rating": 4.0,
-        "sentiment": "positive",
-        "summary": "GigaChat summary.",
-        "tags": "gigachat,review,html",
+        "rating": parsed.get("rating", 4),
+        "sentiment": parsed.get("sentiment", ""),
+        "summary": parsed.get("summary", ""),
+        "tags": ", ".join(parsed.get("tags", [])),
     }
+
+
+# ---------------------------
+# DB helpers
+# ---------------------------
+
+
+def is_product_parsed(
+    db: Session,
+    source_id: int,
+    external_id: str,
+) -> bool:
+
+    existing = db.scalar(
+        select(models.Review).where(
+            models.Review.source_id == source_id,
+            models.Review.external_id == external_id,
+        )
+    )
+
+    return existing is not None
 
 
 def create_knowledge_chunk(
     db: Session,
     review: models.Review,
     *,
-    sentiment: str | None = None,
-    summary: str | None = None,
-    tags: str | None = None,
-) -> models.KnowledgeChunk:
+    sentiment: str,
+    summary: str,
+    tags: str,
+):  
     chunk = models.KnowledgeChunk(
         review_id=review.id,
-        summary=summary or summarize_review(review.body),
-        sentiment=sentiment or "neutral",
-        tags=tags or "",
+        summary=summary,
+        sentiment=sentiment,
+        tags=tags,
         embedding=create_embedding(review.body),
     )
+
+    
+    
     db.add(chunk)
     db.commit()
     db.refresh(chunk)
+
     return chunk
 
 
-def search_knowledge(db: Session, query: str) -> list[tuple[models.KnowledgeChunk, models.Review]]:
-    stmt = (
-        select(models.KnowledgeChunk, models.Review)
-        .join(models.Review, models.KnowledgeChunk.review_id == models.Review.id)
-        .where(models.KnowledgeChunk.summary.ilike(f"%{query}%"))
-        .limit(50)
-    )
-    return list(db.execute(stmt).all())
+# ---------------------------
+# WB fetch
+# ---------------------------
 
 
-def fetch_review_pages_from_source(source: models.Source) -> list[dict[str, str]]:
-    """
-    Получает HTML-страницы по GET и упаковывает их в payload для GigaChat.
-    """
-    stamp = datetime.utcnow().strftime("%Y%m%d%H%M")
-    urls = [source.base_url]
-    html_pages = fetch_html_pages(urls)
+def fetch_review_pages_from_source(
+    source: models.Source,
+) -> list[dict]:
 
-    if not html_pages:
-        html_pages = ["<html><body><div class='review'>Отличный товар, рекомендую.</div></body></html>"]
+    if source.parser_type != "wb":
+        return []
+    
+    log.info("WB parsing started")
 
-    return [
-        {
-            "external_id": f"{source.name}-{stamp}-{idx}",
-            "product_name": "Демо товар",
-            "author": "parser-bot",
-            "html_page": html_page,
-        }
-        for idx, html_page in enumerate(html_pages, start=1)
-    ]
+    db = SessionLocal()
+
+    ids = get_product_ids(30)
+    log.info(f"ids found: {ids}")
+
+    payloads = []
+
+    for pid in ids:
+
+        # проверяем, есть ли карточка в БД
+        if is_product_parsed(db, source.id, pid):
+            log.info(f"skip {pid} — already in DB")
+            continue
+
+        log.info(f"parse {pid} — not in DB yet")
+        reviews = parse_product(pid)
+
+        log.info(f"reviews found: {len(reviews)}")
+
+        for r in reviews:
+            payloads.append(
+                {
+                    "external_id": f"{pid}_{r['reviewer']}_{hash(r['comment'])}",  # уникальный id для каждого отзыва
+                    "product_name": r["product_name"],
+                    "author": r["reviewer"],
+                    "text": r["comment"],
+                    "rating": r["rating"],
+                }
+            )
+
+        # возвращаем **только одну карточку за вызов**
+        break
+
+    db.close()
+    log.info(f"TOTAL payloads returned: {len(payloads)}")
+
+    return payloads
 
 
-def ingest_review_page(db: Session, source: models.Source, payload: dict[str, str]) -> None:
-    existing = db.scalar(
-        select(models.Review).where(
-            models.Review.source_id == source.id,
-            models.Review.external_id == payload["external_id"],
+# ---------------------------
+# ingest
+# ---------------------------
+
+
+def ingest_review_pages_batch(
+    db: Session,
+    source: models.Source,
+    payloads: list[dict],
+):
+
+    reviews_to_add = []
+
+    for payload in payloads:
+
+        text = payload.get("text")
+
+        if not is_valid_review_text(text):
+            log.info(
+                f"skip {payload['external_id']} — bad text"
+            )
+            continue
+
+        existing = db.scalar(
+            select(models.Review).where(
+                models.Review.source_id == source.id,
+                models.Review.external_id == payload["external_id"],
+            )
         )
-    )
-    if existing:
+
+        if existing:
+            log.info(
+                f"skip {payload['external_id']} — exists"
+            )
+            continue
+
+        ai = analyze_review_with_gigachat(text)
+
+        review = models.Review(
+            source_id=source.id,
+            external_id=payload["external_id"],
+            product_name=payload["product_name"],
+            author=payload["author"],
+            rating=float(payload["rating"]),
+            body=text,
+        )
+
+        reviews_to_add.append((review, ai))
+
+    if not reviews_to_add:
+        log.info("nothing to save")
         return
 
-    ai_result = parse_html_with_gigachat(payload["html_page"])
-    review = models.Review(
-        source_id=source.id,
-        external_id=payload["external_id"],
-        product_name=payload["product_name"],
-        author=payload["author"],
-        rating=float(ai_result["rating"]),
-        body=str(ai_result["review_text"]),
-    )
-    db.add(review)
+    # -------- reviews --------
+
+    db.add_all([r for r, _ in reviews_to_add])
     db.commit()
-    db.refresh(review)
-    create_knowledge_chunk(
-        db,
-        review,
-        sentiment=str(ai_result["sentiment"]),
-        summary=str(ai_result["summary"]),
-        tags=str(ai_result["tags"]),
+
+    log.info(
+        f"{len(reviews_to_add)} reviews saved"
     )
 
+    # -------- chunks --------
 
-async def run_continuous_ingestion(stop_event: asyncio.Event) -> None:
-    poll_interval_sec = int(os.getenv("PARSER_POLL_INTERVAL_SEC", "60"))
+    chunks = []
+
+    for review, ai in reviews_to_add:
+
+        chunk = models.KnowledgeChunk(
+            review_id=review.id,
+            summary=ai["summary"],
+            sentiment=ai.get("sentiment") or "нейтральное",
+            tags=ai["tags"],
+            embedding=create_embedding(f'{review.product_name}. {review.body}'),
+        )
+
+        chunks.append(chunk)
+
+    db.add_all(chunks)
+    db.commit()
+
+    log.info(
+        f"{len(chunks)} chunks created"
+    )
+
+# ---------------------------
+# loop
+# ---------------------------
+
+
+async def run_continuous_ingestion(
+    stop_event: asyncio.Event,
+):
+
+    poll_interval_sec = int(
+        os.getenv(
+            "PARSER_POLL_INTERVAL_SEC",
+            "30",
+        )
+    )
+
+    log.info("INGESTION STARTED")
 
     while not stop_event.is_set():
+
         db = SessionLocal()
+
         try:
-            sources = db.scalars(select(models.Source)).all()
+
+            sources = db.scalars(
+                select(models.Source)
+            ).all()
+
+            log.info(
+                f"sources found: {len(sources)}"
+            )
+
             for source in sources:
-                for page in fetch_review_pages_from_source(source):
-                    ingest_review_page(db, source, page)
+
+                log.info(
+                    f"source: {source.name}"
+                )
+
+                payloads = fetch_review_pages_from_source(
+                    source
+                )
+
+                if not payloads:
+                    log.info(
+                        "no new cards"
+                    )
+                    continue
+
+                ingest_review_pages_batch(
+                    db,
+                    source,
+                    payloads,
+                )
+
+        except Exception as e:
+
+            log.exception(
+                f"INGEST ERROR: {e}"
+            )
+
         finally:
+
             db.close()
 
         try:
-            await asyncio.wait_for(stop_event.wait(), timeout=poll_interval_sec)
+
+            await asyncio.wait_for(
+                stop_event.wait(),
+                timeout=poll_interval_sec,
+            )
+
         except asyncio.TimeoutError:
             continue
+
+
+async def search_chunks(query: str, top_k: int = 5):
+    # создаём embedding запроса точно так же, как для chunk
+    query_embedding = create_embedding(f"query: {query}")
+
+    if query_embedding is None:
+        return []
+
+    def db_query():
+        with SessionLocal() as db:
+            stmt = (
+                select(KnowledgeChunk)
+                .join(KnowledgeChunk.review)
+                .options(selectinload(KnowledgeChunk.review))
+                .where(
+                    models.Review.product_name.ilike(f"%{query}%")  # 👈 фильтр
+                )
+                .order_by(
+                    KnowledgeChunk.embedding.cosine_distance(query_embedding)
+                )
+                .limit(top_k)
+            )
+
+            return db.execute(stmt).scalars().all()
+
+    import asyncio
+    return await asyncio.to_thread(db_query)

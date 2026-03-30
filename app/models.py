@@ -42,7 +42,7 @@ class KnowledgeChunk(Base):
     summary: Mapped[str] = mapped_column(Text, nullable=False)
     sentiment: Mapped[str] = mapped_column(String(32), nullable=False)
     tags: Mapped[str] = mapped_column(String(256), default="", nullable=False)
-    embedding: Mapped[list[float] | None] = mapped_column(Vector(1536), nullable=True)
+    embedding: Mapped[list[float] | None] = mapped_column(Vector(384), nullable=True)
 
     review: Mapped["Review"] = relationship(back_populates="knowledge_chunks")
 
