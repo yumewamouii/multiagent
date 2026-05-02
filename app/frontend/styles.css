@@ -1,0 +1,7 @@
+body{background:radial-gradient(circle at top,#1d2b64,#0f1230 60%,#090b1a);min-height:100vh;color:#e8efff}
+.glass{background:rgba(10,16,38,.72);border:1px solid rgba(151,175,255,.24);backdrop-filter:blur(8px)}
+.kpi{font-size:2rem;font-weight:700;line-height:1.1}
+.nav-link{padding:.35rem .75rem;border-radius:.75rem}.nav-link:hover{background:rgba(255,255,255,.1)}
+.form-control{background:#0b1330;border:1px solid #314171;color:#e8efff}.form-control:focus{background:#0b1330;color:#e8efff;border-color:#6a91ff;box-shadow:0 0 0 .2rem rgba(88,133,255,.2)}
+.btn-primary{background:linear-gradient(90deg,#5b8cff,#7f58ff);border:0}
+pre{white-space:pre-wrap;background:#0b1230;color:#d9e4ff;border:1px solid rgba(148,170,255,.25);border-radius:12px;padding:12px;margin:0}

@@ -1,8 +1,11 @@
 import asyncio
 import os
+from pathlib import Path
 from contextlib import asynccontextmanager
 
 from fastapi import Depends, FastAPI, HTTPException, Query, Response
+from fastapi.responses import FileResponse
+from fastapi.staticfiles import StaticFiles
 from sqlalchemy import select, text
 from sqlalchemy.orm import Session
 
@@ -39,11 +42,31 @@ async def lifespan(app: FastAPI):
         await agents.runtime.stop()
 
 
+FRONTEND_DIR = Path(__file__).resolve().parent / "frontend"
+
 app = FastAPI(
     title="Multi-agent Backend",
     version="0.5.0",
     lifespan=lifespan,
 )
+
+app.mount("/ui", StaticFiles(directory=FRONTEND_DIR), name="ui")
+
+
+@app.get("/")
+def frontend_home():
+    return FileResponse(FRONTEND_DIR / "index.html")
+
+
+@app.get("/dashboard")
+def frontend_dashboard():
+    return FileResponse(FRONTEND_DIR / "dashboard.html")
+
+
+@app.get("/queries")
+def frontend_queries():
+    return FileResponse(FRONTEND_DIR / "queries.html")
+
 
 # ---------------------------
 # health
