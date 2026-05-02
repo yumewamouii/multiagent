@@ -3,6 +3,8 @@ import os
 from contextlib import asynccontextmanager
 
 from fastapi import Depends, FastAPI, HTTPException, Query, Response
+from fastapi.responses import FileResponse
+from fastapi.staticfiles import StaticFiles
 from sqlalchemy import select, text
 from sqlalchemy.orm import Session
 
@@ -44,6 +46,24 @@ app = FastAPI(
     version="0.5.0",
     lifespan=lifespan,
 )
+
+app.mount("/ui", StaticFiles(directory="app/frontend"), name="ui")
+
+
+@app.get("/")
+def frontend_home():
+    return FileResponse("app/frontend/index.html")
+
+
+@app.get("/dashboard")
+def frontend_dashboard():
+    return FileResponse("app/frontend/dashboard.html")
+
+
+@app.get("/queries")
+def frontend_queries():
+    return FileResponse("app/frontend/queries.html")
+
 
 # ---------------------------
 # health
