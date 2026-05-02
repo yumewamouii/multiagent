@@ -1,0 +1,7 @@
+<!doctype html><html lang="ru"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Dashboard</title><link rel="stylesheet" href="/ui/styles.css"><script src="https://cdn.jsdelivr.net/npm/chart.js"></script></head>
+<body><div class="container"><nav class="nav"><div class="brand">Dashboard</div><div><a href="/">Главная</a><a href="/dashboard">Дашборды</a><a href="/queries">AI Запросы</a></div></nav>
+<div class="card"><h2>Фильтры аналитики</h2><div class="form-row"><input id="product" placeholder="Название товара" value="Чайник"><input id="source" type="number" placeholder="Source ID"><button id="load">Загрузить</button><button id="export">Экспорт CSV</button></div></div>
+<div class="grid grid-3" style="margin-top:16px"><div class="card"><div class="muted">Review Count</div><div id="review_count" class="kpi">-</div></div><div class="card"><div class="muted">Avg Rating</div><div id="avg_rating" class="kpi">-</div></div><div class="card"><div class="muted">Negative Ratio</div><div id="negative_ratio" class="kpi">-</div></div></div>
+<div class="card" style="margin-top:16px"><canvas id="sentimentChart" height="90"></canvas></div>
+<div class="card" style="margin-top:16px"><h3>Последние инсайты</h3><table class="table"><thead><tr><th>ID</th><th>Товар</th><th>Confidence</th><th>Дата</th><th>Summary</th></tr></thead><tbody id="rows"></tbody></table></div>
+</div><script src="/ui/dashboard.js"></script></body></html>
