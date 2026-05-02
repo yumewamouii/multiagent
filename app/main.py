@@ -1,5 +1,6 @@
 import asyncio
 import os
+from pathlib import Path
 from contextlib import asynccontextmanager
 
 from fastapi import Depends, FastAPI, HTTPException, Query, Response
@@ -40,6 +41,8 @@ async def lifespan(app: FastAPI):
             app.state.ingestion_task = None
         await agents.runtime.stop()
 
+
+FRONTEND_DIR = Path(__file__).resolve().parent / "frontend"
 
 app = FastAPI(
     title="Multi-agent Backend",
