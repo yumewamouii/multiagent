@@ -1,74 +1,49 @@
 import asyncio
+import os
+from contextlib import asynccontextmanager
 
-from fastapi import Depends, FastAPI, HTTPException, Query
+from fastapi import Depends, FastAPI, HTTPException, Query, Response
 from sqlalchemy import select, text
 from sqlalchemy.orm import Session
 
+from app import agents
 from app import models, schemas, services
 from app.db import Base, engine, get_db
+
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    if engine.dialect.name == "postgresql":
+        with engine.begin() as connection:
+            connection.execute(text("CREATE EXTENSION IF NOT EXISTS vector"))
+    Base.metadata.create_all(bind=engine)
+
+    app.state.ingestion_stop_event = asyncio.Event()
+    app.state.ingestion_task = None
+
+    if os.getenv("ENABLE_BACKGROUND_INGESTION", "false").lower() == "true":
+        app.state.ingestion_stop_event.clear()
+        app.state.ingestion_task = asyncio.create_task(
+            services.run_continuous_ingestion(app.state.ingestion_stop_event)
+        )
+
+    await agents.runtime.start()
+    try:
+        yield
+    finally:
+        task = app.state.ingestion_task
+        if task is not None:
+            app.state.ingestion_stop_event.set()
+            await task
+            app.state.ingestion_task = None
+        await agents.runtime.stop()
 
 
 app = FastAPI(
     title="Multi-agent Backend",
     version="0.5.0",
+    lifespan=lifespan,
 )
-
-
-app.state.ingestion_task = None
-app.state.ingestion_stop_event = asyncio.Event()
-
-
-# ---------------------------
-# DB init
-# ---------------------------
-
-
-@app.on_event("startup")
-def init_db() -> None:
-
-    if engine.dialect.name == "postgresql":
-
-        with engine.begin() as connection:
-
-            connection.execute(
-                text(
-                    "CREATE EXTENSION IF NOT EXISTS vector"
-                )
-            )
-
-    Base.metadata.create_all(bind=engine)
-
-
-# ---------------------------
-# background ingestion
-# ---------------------------
-
-
-@app.on_event("startup")
-async def start_background_ingestion():
-
-    app.state.ingestion_stop_event.clear()
-
-    app.state.ingestion_task = asyncio.create_task(
-        services.run_continuous_ingestion(
-            app.state.ingestion_stop_event
-        )
-    )
-
-@app.on_event("shutdown")
-async def stop_background_ingestion():
-
-    task = app.state.ingestion_task
-
-    if task is None:
-        return
-
-    app.state.ingestion_stop_event.set()
-
-    await task
-
-    app.state.ingestion_task = None
-
 
 # ---------------------------
 # health
@@ -216,17 +191,191 @@ def create_agent(
 
 @app.get("/knowledge/search")
 async def search_knowledge(query: str = Query(min_length=2), top_k: int = 5):
-    # вызываем вашу асинхронную функцию поиска
     results = await services.search_chunks(query, top_k=top_k)
 
-    # возвращаем удобный для клиента формат
     return [
         {
             "review_id": chunk.review_id,
+            "product_name": chunk.review.product_name if chunk.review else None,
             "summary": chunk.summary,
             "sentiment": chunk.sentiment,
             "tags": chunk.tags,
-            "review text": chunk.review.body # если нужно вернуть
+            "review_text": chunk.review.body if chunk.review else None,
         }
         for chunk in results
     ]
+
+
+@app.post(
+    "/multiagent/query",
+    response_model=schemas.MultiAgentResponse,
+)
+async def multiagent_query(payload: schemas.MultiAgentQuery):
+    result = await agents.orchestrate(
+        query=payload.query,
+        top_k=payload.top_k,
+    )
+
+    critic = result["critic"]
+
+    return {
+        "route": result["route"],
+        "answer": result["answer"],
+        "confidence": critic["confidence"],
+        "critic_notes": critic["notes"],
+        "evidence": result["evidence"],
+    }
+
+
+@app.post(
+    "/rag/query",
+    response_model=schemas.RagResponse,
+)
+async def rag_query(payload: schemas.RagQuery):
+    return await services.rag_answer(
+        query=payload.query,
+        top_k=payload.top_k,
+    )
+
+
+@app.post(
+    "/insights/product",
+    response_model=schemas.ProductInsightResponse,
+)
+async def product_insight(payload: schemas.ProductInsightQuery):
+    return await agents.runtime.product_insight(
+        product_name=payload.product_name,
+        top_k=payload.top_k,
+        source_id=payload.source_id,
+        date_from=payload.date_from,
+        date_to=payload.date_to,
+    )
+
+
+@app.post(
+    "/insights/dashboard",
+    response_model=schemas.DashboardResponse,
+)
+def insights_dashboard(payload: schemas.DashboardQuery):
+    return services.get_dashboard_insights(
+        product_name=payload.product_name,
+        source_id=payload.source_id,
+        date_from=payload.date_from,
+        date_to=payload.date_to,
+        page=payload.page,
+        page_size=payload.page_size,
+    )
+
+
+@app.post("/insights/dashboard/export")
+def insights_dashboard_export(payload: schemas.DashboardQuery):
+    report = services.get_dashboard_insights(
+        product_name=payload.product_name,
+        source_id=payload.source_id,
+        date_from=payload.date_from,
+        date_to=payload.date_to,
+        page=payload.page,
+        page_size=payload.page_size,
+    )
+    header = "run_id,product_name,source_id,confidence,created_at,summary"
+    rows = [header]
+    for item in report["items"]:
+        summary = (item["summary"] or "").replace('"', "'").replace("\n", " ").strip()
+        rows.append(
+            f'{item["run_id"]},"{item["product_name"]}",{item["source_id"] or ""},{item["confidence"]},{item["created_at"]},"{summary}"'
+        )
+    csv_data = "\n".join(rows)
+    return Response(content=csv_data, media_type="text/csv")
+
+
+@app.post(
+    "/multiagent/query/async",
+    response_model=schemas.MultiAgentJobAccepted,
+)
+async def multiagent_query_async(payload: schemas.MultiAgentQuery):
+    job_id = await agents.runtime.submit(
+        query=payload.query,
+        top_k=payload.top_k,
+    )
+    return {
+        "job_id": job_id,
+        "status": "queued",
+    }
+
+
+@app.get(
+    "/multiagent/jobs/{job_id}",
+    response_model=schemas.MultiAgentJobStatus,
+)
+async def get_multiagent_job(job_id: str):
+    job = agents.runtime.get_job(job_id)
+    if job is None:
+        raise HTTPException(status_code=404, detail="job not found")
+
+    result_payload = None
+    if job["result"] is not None:
+        result_payload = {
+            "route": job["result"]["route"],
+            "answer": job["result"]["answer"],
+            "confidence": job["result"]["critic"]["confidence"],
+            "critic_notes": job["result"]["critic"]["notes"],
+            "evidence": job["result"]["evidence"],
+        }
+
+    return {
+        "job_id": job["job_id"],
+        "status": job["status"],
+        "created_at": job["created_at"],
+        "updated_at": job["updated_at"],
+        "error": job["error"],
+        "result": result_payload,
+    }
+
+
+@app.get(
+    "/reviews/{review_id}",
+    response_model=schemas.ReviewRead,
+)
+def get_review(
+    review_id: int,
+    db: Session = Depends(get_db),
+):
+    review = db.scalar(
+        select(models.Review).where(
+            models.Review.id == review_id
+        )
+    )
+
+    if not review:
+        raise HTTPException(
+            status_code=404,
+            detail="review not found",
+        )
+
+    return review
+
+
+@app.get(
+    "/knowledge/{chunk_id}",
+)
+def get_knowledge_chunk(
+    chunk_id: int,
+    db: Session = Depends(get_db),
+):
+    chunk = db.get(models.KnowledgeChunk, chunk_id)
+
+    if not chunk:
+        raise HTTPException(
+            status_code=404,
+            detail="knowledge chunk not found",
+        )
+
+    return {
+        "id": chunk.id,
+        "review_id": chunk.review_id,
+        "summary": chunk.summary,
+        "sentiment": chunk.sentiment,
+        "tags": chunk.tags,
+        "embedding": chunk.embedding.tolist() if chunk.embedding is not None else None,
+        "review_text": chunk.review.body if chunk.review else None,
+    }

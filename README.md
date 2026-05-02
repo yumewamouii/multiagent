@@ -21,6 +21,7 @@
 - `DATABASE_URL` — строка подключения к PostgreSQL.
   - по умолчанию: `postgresql+psycopg://postgres:postgres@localhost:5432/multiagent`
 - `GIGACHAT_API_KEY` — ключ для интеграции с API GigaChat.
+- `ENABLE_BACKGROUND_INGESTION` — включает непрерывный ingestion (`true`/`false`, по умолчанию `false`).
 
 
 ## Запуск
@@ -57,3 +58,90 @@ curl -X POST http://127.0.0.1:8000/sources \
 ```bash
 curl 'http://127.0.0.1:8000/knowledge/search?query=пылесос'
 ```
+
+### 3) Multi-agent ответ (router/worker/critic/summarizer)
+
+```bash
+curl -X POST http://127.0.0.1:8000/multiagent/query \
+  -H 'Content-Type: application/json' \
+  -d '{
+    "query": "какие плюсы и минусы у чайника?",
+    "top_k": 5
+  }'
+```
+
+### 4) Async multi-agent очередь
+
+```bash
+curl -X POST http://127.0.0.1:8000/multiagent/query/async \
+  -H 'Content-Type: application/json' \
+  -d '{
+    "query": "сравни два товара",
+    "top_k": 5
+  }'
+```
+
+```bash
+curl http://127.0.0.1:8000/multiagent/jobs/<job_id>
+```
+
+### 5) RAG-запрос (retrieve + rerank + generate)
+
+```bash
+curl -X POST http://127.0.0.1:8000/rag/query \
+  -H 'Content-Type: application/json' \
+  -d '{
+    "query": "какие сильные и слабые стороны товара?",
+    "top_k": 5
+  }'
+```
+
+Ответ включает:
+- `answer` — grounded ответ;
+- `citations` — источники, использованные в генерации;
+- `metrics` — latency и объем retrieval-кандидатов.
+
+### 6) Product Insights для маркетологов/аналитиков
+
+```bash
+curl -X POST http://127.0.0.1:8000/insights/product \
+  -H 'Content-Type: application/json' \
+  -d '{
+    "product_name": "Чайник X",
+    "top_k": 8,
+    "source_id": 1
+  }'
+```
+
+Этот flow возвращает:
+- агрегированные инсайты по отзывам товара;
+- `sentiment_breakdown` и `top_tags` для аналитики;
+- `roles` и `tools`, задействованные в запуске;
+- `business_roles` (`market_analyst`, `campaign_advisor`);
+- `mcp_flow` с сообщениями между агентами (Router -> Tools -> Critic -> Summarizer);
+- сохранение запуска и MCP-событий в БД (`insight_runs`, `mcp_events`).
+
+### 7) Dashboard для маркетологов
+
+```bash
+curl -X POST http://127.0.0.1:8000/insights/dashboard \
+  -H 'Content-Type: application/json' \
+  -d '{
+    "product_name": "Чайник",
+    "source_id": 1,
+    "page": 1,
+    "page_size": 20
+  }'
+```
+
+```bash
+curl -X POST http://127.0.0.1:8000/insights/dashboard/export \
+  -H 'Content-Type: application/json' \
+  -d '{
+    "product_name": "Чайник"
+  }'
+```
+
+Dashboard теперь возвращает:
+- пагинацию: `page`, `page_size`, `total_pages`;
+- KPI для маркетинга: `review_count`, `avg_rating`, `negative_ratio`, `positive_ratio`.

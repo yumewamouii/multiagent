@@ -57,3 +57,29 @@ class AgentProfile(Base):
     model_name: Mapped[str] = mapped_column(String(128), nullable=False, default="GigaChat")
     prompt_template: Mapped[str] = mapped_column(Text, nullable=False)
     toolset: Mapped[str] = mapped_column(String(256), default="", nullable=False)
+
+
+class InsightRun(Base):
+    __tablename__ = "insight_runs"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
+    product_name: Mapped[str] = mapped_column(String(256), nullable=False, index=True)
+    source_id: Mapped[int | None] = mapped_column(Integer, nullable=True, index=True)
+    date_from: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    date_to: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    summary: Mapped[str] = mapped_column(Text, nullable=False)
+    confidence: Mapped[float] = mapped_column(Float, nullable=False, default=0.0)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, nullable=False, index=True)
+
+
+class MCPEvent(Base):
+    __tablename__ = "mcp_events"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
+    run_id: Mapped[int] = mapped_column(ForeignKey("insight_runs.id"), nullable=False, index=True)
+    message_id: Mapped[str] = mapped_column(String(64), nullable=False, index=True)
+    from_agent: Mapped[str] = mapped_column(String(64), nullable=False)
+    to_agent: Mapped[str] = mapped_column(String(64), nullable=False)
+    intent: Mapped[str] = mapped_column(String(128), nullable=False)
+    payload_json: Mapped[str] = mapped_column(Text, nullable=False, default="{}")
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, nullable=False)
