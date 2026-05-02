@@ -50,22 +50,22 @@ app = FastAPI(
     lifespan=lifespan,
 )
 
-app.mount("/ui", StaticFiles(directory=FRONTEND_DIR), name="ui")
+app.mount("/ui", StaticFiles(directory="app/frontend"), name="ui")
 
 
 @app.get("/")
 def frontend_home():
-    return FileResponse(FRONTEND_DIR / "index.html")
+    return FileResponse("app/frontend/index.html")
 
 
 @app.get("/dashboard")
 def frontend_dashboard():
-    return FileResponse(FRONTEND_DIR / "dashboard.html")
+    return FileResponse("app/frontend/dashboard.html")
 
 
 @app.get("/queries")
 def frontend_queries():
-    return FileResponse(FRONTEND_DIR / "queries.html")
+    return FileResponse("app/frontend/queries.html")
 
 
 # ---------------------------

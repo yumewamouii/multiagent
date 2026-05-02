@@ -1,7 +1,16 @@
-body{background:radial-gradient(circle at top,#1d2b64,#0f1230 60%,#090b1a);min-height:100vh;color:#e8efff}
-.glass{background:rgba(10,16,38,.72);border:1px solid rgba(151,175,255,.24);backdrop-filter:blur(8px)}
-.kpi{font-size:2rem;font-weight:700;line-height:1.1}
-.nav-link{padding:.35rem .75rem;border-radius:.75rem}.nav-link:hover{background:rgba(255,255,255,.1)}
-.form-control{background:#0b1330;border:1px solid #314171;color:#e8efff}.form-control:focus{background:#0b1330;color:#e8efff;border-color:#6a91ff;box-shadow:0 0 0 .2rem rgba(88,133,255,.2)}
-.btn-primary{background:linear-gradient(90deg,#5b8cff,#7f58ff);border:0}
-pre{white-space:pre-wrap;background:#0b1230;color:#d9e4ff;border:1px solid rgba(148,170,255,.25);border-radius:12px;padding:12px;margin:0}
+:root{--bg:#0b1020;--card:#121a33;--muted:#8fa2c9;--text:#e8efff;--accent:#5b8cff;--good:#31c48d;--bad:#ff6b6b}
+*{box-sizing:border-box}body{margin:0;font-family:Inter,system-ui,Segoe UI,Arial,sans-serif;background:linear-gradient(160deg,#0a1022,#151f3e 45%,#0d1630);color:var(--text)}
+.container{max-width:1200px;margin:0 auto;padding:24px}
+.nav{display:flex;justify-content:space-between;align-items:center;margin-bottom:22px}.nav a{color:var(--text);text-decoration:none;margin-right:16px;opacity:.9}.nav a:hover{opacity:1}
+.brand{font-weight:700;font-size:1.2rem}
+.grid{display:grid;gap:18px}.grid-3{grid-template-columns:repeat(auto-fit,minmax(220px,1fr))}
+.card{background:rgba(18,26,51,.88);border:1px solid rgba(144,169,255,.18);backdrop-filter:blur(6px);padding:18px;border-radius:16px;box-shadow:0 8px 25px rgba(0,0,0,.2)}
+.kpi{font-size:1.9rem;font-weight:700;margin-top:8px}.muted{color:var(--muted)}
+h1,h2,h3{margin:0 0 12px}h1{font-size:2rem}
+.table{width:100%;border-collapse:collapse}.table th,.table td{padding:10px;border-bottom:1px solid rgba(255,255,255,.09);text-align:left}
+input,select,button,textarea{background:#0c1430;border:1px solid rgba(148,170,255,.3);color:var(--text);border-radius:10px;padding:10px}
+button{cursor:pointer;background:linear-gradient(90deg,var(--accent),#7f58ff);border:none;font-weight:600}
+button:disabled{opacity:.5;cursor:not-allowed}
+.form-row{display:flex;gap:12px;flex-wrap:wrap;margin-bottom:12px}.form-row>*{flex:1;min-width:180px}
+.badge{padding:4px 8px;border-radius:999px;font-size:.8rem}.pos{background:rgba(49,196,141,.2);color:#83ffd0}.neg{background:rgba(255,107,107,.2);color:#ff9f9f}
+pre{white-space:pre-wrap;background:#0a132c;padding:12px;border-radius:10px;border:1px solid rgba(148,170,255,.2)}
