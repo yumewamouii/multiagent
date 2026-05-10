@@ -42,8 +42,8 @@ class ReviewRead(ReviewIngest):
 class AgentCreate(BaseModel):
     name: str
     role: str
-    provider: str = "gigachat"
-    model_name: str = "GigaChat"
+    provider: str = "lmstudio"
+    model_name: str = "local-model"
     prompt_template: str
     toolset: str = ""
 

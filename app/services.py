@@ -5,6 +5,7 @@ import os
 import json
 import re
 import time
+from collections import defaultdict
 from datetime import datetime
 from typing import Any
 
@@ -18,10 +19,8 @@ from app.db import SessionLocal
 from app.parsers.wildberries.crawler import get_product_ids
 from app.parsers.wildberries.parser import parse_product
 
-from app.gigachat import gigachat_request
-
-
 from app.ai.embedding import create_embedding
+from app.llm import chat_completion, parse_json_response
 
 
 from app.models import KnowledgeChunk
@@ -35,6 +34,15 @@ logging.basicConfig(
 )
 
 log = logging.getLogger(__name__)
+
+INGESTION_STATE: dict[str, Any] = {
+    "running": False,
+    "last_started_at": None,
+    "last_cycle_at": None,
+    "last_sources_count": 0,
+    "last_error": None,
+    "last_error_at": None,
+}
 
 
 # ---------------------------
@@ -60,39 +68,8 @@ def summarize_review(text: str, max_chars: int = 220) -> str:
     return text[:max_chars].strip()
 
 
-'''
-def create_embedding(text: str) -> list[float] | None:
-
-    if not text:
-        return None
-
-    if not os.getenv("GIGACHAT_API_KEY"):
-        return None
-
-    try:
-
-        data = {
-            "model": "Embeddings",
-            "input": text,
-        }
-
-        result = gigachat_request(
-            "embeddings",
-            data,
-        )
-
-        embedding = result["data"][0]["embedding"]
-
-        return embedding
-
-    except Exception as e:
-
-        log.warning(f"embedding error: {e}")
-
-        return None
-'''
 # ---------------------------
-# GIGACHAT
+# LLM
 # ---------------------------
 
 
@@ -112,9 +89,65 @@ def extract_json(text: str) -> dict | None:
         return None
 
 
-def analyze_review_with_gigachat(text: str) -> dict:
+def _normalize_review_tags(raw: Any) -> str:
+    if raw is None:
+        return ""
+    if isinstance(raw, str):
+        return raw.strip()
+    if isinstance(raw, list):
+        return ", ".join(str(x).strip() for x in raw if str(x).strip())
+    return str(raw).strip()
 
-    if not os.getenv("GIGACHAT_API_KEY"):
+
+def _parse_review_llm_content(content: str) -> dict | None:
+    """Several strategies; models often wrap JSON in markdown or add prose."""
+    if not (content or "").strip():
+        return None
+    parsed = parse_json_response(content)
+    if isinstance(parsed, dict):
+        return parsed
+    parsed = extract_json(content)
+    if isinstance(parsed, dict):
+        return parsed
+    # Частый формат: ключи без строгого JSON (кавычки/запятые)
+    rating_m = re.search(r'"rating"\s*:\s*(\d+)', content)
+    sentiment_m = re.search(r'"sentiment"\s*:\s*"([^"]*)"', content)
+    summary_m = re.search(r'"summary"\s*:\s*"((?:[^"\\]|\\.)*)"', content, re.DOTALL)
+    if not summary_m:
+        summary_m = re.search(r'"summary"\s*:\s*"([^"]{1,800})', content, re.DOTALL)
+    tags_m = re.search(r'"tags"\s*:\s*\[(.*?)\]', content, re.DOTALL)
+    if rating_m or sentiment_m or summary_m or tags_m:
+        out: dict[str, Any] = {}
+        if rating_m:
+            out["rating"] = int(rating_m.group(1))
+        if sentiment_m:
+            out["sentiment"] = sentiment_m.group(1)
+        if summary_m:
+            out["summary"] = summary_m.group(1).replace("\\n", "\n").strip()
+        if tags_m:
+            inner = tags_m.group(1)
+            parts = re.findall(r'"([^"]*)"', inner)
+            out["tags"] = parts if parts else [inner.strip()]
+        return out
+    return None
+
+
+def analyze_review_with_llm(text: str) -> dict:
+    system_prompt = (
+        "Ты анализируешь отзыв. Ответь одним JSON-объектом на одной строке, без markdown и без текста до/после. "
+        "Схема: {\"rating\": <целое 1-5>, \"sentiment\": \"positive|neutral|negative\", "
+        "\"summary\": \"кратко по-русски\", \"tags\": [\"тег1\", \"тег2\"]}. "
+        "tags — 1-5 коротких слов."
+    )
+    user_prompt = f"Отзыв:\n{text}"
+    try:
+        content = chat_completion(
+            system_prompt=system_prompt,
+            user_prompt=user_prompt,
+            temperature=0.1,
+            max_tokens=280,
+        )
+    except Exception:
         return {
             "rating": 4,
             "sentiment": "",
@@ -122,46 +155,31 @@ def analyze_review_with_gigachat(text: str) -> dict:
             "tags": "",
         }
 
-    prompt = f"""
-Проанализируй отзыв и верни ТОЛЬКО JSON. Без текста. Без объяснений. Без markdown.
-Формат:
-{{
-  "rating": int,
-  "sentiment": str,
-  "summary": str,
-  "tags": list
-}}
-Отзыв:
-{text}
-"""
-    data = {
-        "model": "GigaChat",
-        "messages": [
-            {"role": "user", "content": prompt}
-        ],
-        "temperature": 0.2,
-    }
-    result = gigachat_request("chat/completions", data)
-
-    content = result["choices"][0]["message"]["content"]
-
-    parsed = extract_json(content)
+    parsed = _parse_review_llm_content(content)
 
     if not parsed:
-        log.warning(f"GIGACHAT BAD JSON: {content}")
+        preview = (content or "").replace("\n", " ")[:300]
+        log.debug("review LLM parse fallback, raw preview: %s", preview)
 
         return {
             "rating": 4,
             "sentiment": "",
-            "summary": content[:200],
+            "summary": (content or text)[:200],
             "tags": "",
         }
 
+    raw_rating = parsed.get("rating", 4)
+    try:
+        rating = int(float(raw_rating))
+    except (TypeError, ValueError):
+        rating = 4
+    rating = max(1, min(5, rating))
+
     return {
-        "rating": parsed.get("rating", 4),
-        "sentiment": parsed.get("sentiment", ""),
-        "summary": parsed.get("summary", ""),
-        "tags": ", ".join(parsed.get("tags", [])),
+        "rating": rating,
+        "sentiment": str(parsed.get("sentiment", "") or ""),
+        "summary": str(parsed.get("summary", "") or "")[:500],
+        "tags": _normalize_review_tags(parsed.get("tags")),
     }
 
 
@@ -219,8 +237,15 @@ def create_knowledge_chunk(
 def fetch_review_pages_from_source(
     source: models.Source,
 ) -> list[dict]:
-
-    if source.parser_type != "wb":
+    parser_type = (source.parser_type or "").strip().lower()
+    wb_aliases = {"wb", "wildberries", "wb_parser", "wildberries_parser"}
+    if parser_type not in wb_aliases:
+        log.info(
+            "skip source '%s': unsupported parser_type='%s' (expected one of %s)",
+            source.name,
+            source.parser_type,
+            ", ".join(sorted(wb_aliases)),
+        )
         return []
     
     log.info("WB parsing started")
@@ -300,7 +325,7 @@ def ingest_review_pages_batch(
             )
             continue
 
-        ai = analyze_review_with_gigachat(text)
+        ai = analyze_review_with_llm(text)
 
         review = models.Review(
             source_id=source.id,
@@ -354,6 +379,31 @@ def ingest_review_pages_batch(
 # ---------------------------
 
 
+def _ingestion_sync_pass() -> None:
+    """Один проход ingestion: только sync I/O и LLM — выполнять в thread pool."""
+    db = SessionLocal()
+    try:
+        sources = db.scalars(select(models.Source)).all()
+        INGESTION_STATE["last_cycle_at"] = datetime.utcnow().isoformat()
+        INGESTION_STATE["last_sources_count"] = len(sources)
+
+        log.info("sources found: %s", len(sources))
+
+        for source in sources:
+            log.info("source: %s", source.name)
+            payloads = fetch_review_pages_from_source(source)
+            if not payloads:
+                log.info("no new cards")
+                continue
+            ingest_review_pages_batch(db, source, payloads)
+    except Exception as e:
+        INGESTION_STATE["last_error"] = str(e)
+        INGESTION_STATE["last_error_at"] = datetime.utcnow().isoformat()
+        log.exception("INGEST ERROR: %s", e)
+    finally:
+        db.close()
+
+
 async def run_continuous_ingestion(
     stop_event: asyncio.Event,
 ):
@@ -365,63 +415,26 @@ async def run_continuous_ingestion(
         )
     )
 
+    INGESTION_STATE["running"] = True
+    INGESTION_STATE["last_started_at"] = datetime.utcnow().isoformat()
+    INGESTION_STATE["last_error"] = None
     log.info("INGESTION STARTED")
-
-    while not stop_event.is_set():
-
-        db = SessionLocal()
-
-        try:
-
-            sources = db.scalars(
-                select(models.Source)
-            ).all()
-
-            log.info(
-                f"sources found: {len(sources)}"
-            )
-
-            for source in sources:
-
-                log.info(
-                    f"source: {source.name}"
+    try:
+        while not stop_event.is_set():
+            await asyncio.to_thread(_ingestion_sync_pass)
+            try:
+                await asyncio.wait_for(
+                    stop_event.wait(),
+                    timeout=poll_interval_sec,
                 )
+            except asyncio.TimeoutError:
+                continue
+    finally:
+        INGESTION_STATE["running"] = False
 
-                payloads = fetch_review_pages_from_source(
-                    source
-                )
 
-                if not payloads:
-                    log.info(
-                        "no new cards"
-                    )
-                    continue
-
-                ingest_review_pages_batch(
-                    db,
-                    source,
-                    payloads,
-                )
-
-        except Exception as e:
-
-            log.exception(
-                f"INGEST ERROR: {e}"
-            )
-
-        finally:
-
-            db.close()
-
-        try:
-
-            await asyncio.wait_for(
-                stop_event.wait(),
-                timeout=poll_interval_sec,
-            )
-
-        except asyncio.TimeoutError:
-            continue
+def get_ingestion_state() -> dict[str, Any]:
+    return dict(INGESTION_STATE)
 
 
 async def search_chunks(
@@ -527,30 +540,17 @@ def _build_context(chunks: list[KnowledgeChunk]) -> str:
 
 
 def _generate_grounded_answer(query: str, context: str) -> str:
-    if not os.getenv("GIGACHAT_API_KEY"):
-        return (
-            "Сформирован ответ по локальному шаблону (без LLM). "
-            "Источник информации: retrieved chunks."
-        )
-
-    prompt = f"""
-Ты RAG-ассистент. Отвечай только по контексту. Если данных мало — так и скажи.
-Укажи краткие выводы и опирайся на источники [1], [2], ...
-
-Вопрос:
-{query}
-
-Контекст:
-{context}
-"""
-    payload = {
-        "model": "GigaChat",
-        "messages": [{"role": "user", "content": prompt}],
-        "temperature": 0.1,
-    }
     try:
-        response = gigachat_request("chat/completions", payload)
-        return response["choices"][0]["message"]["content"]
+        return chat_completion(
+            system_prompt=(
+                "Ты RAG-ассистент. Отвечай только по предоставленному контексту. "
+                "Если данных недостаточно, явно скажи это. "
+                "Используй ссылки вида [1], [2] на элементы контекста."
+            ),
+            user_prompt=f"Вопрос:\n{query}\n\nКонтекст:\n{context}",
+            temperature=0.1,
+            max_tokens=400,
+        )
     except Exception as exc:  # pragma: no cover - network dependent
         log.warning("rag generation failed: %s", exc)
         return "Не удалось сгенерировать ответ через LLM. Вернул только найденные источники."
@@ -715,3 +715,39 @@ def get_dashboard_insights(
             },
             "items": items,
         }
+
+
+def get_dashboard_timeseries(
+    product_name: str | None = None,
+    source_id: int | None = None,
+    date_from: datetime | None = None,
+    date_to: datetime | None = None,
+) -> list[dict[str, float | str | int]]:
+    with SessionLocal() as db:
+        stmt = select(models.InsightRun).order_by(models.InsightRun.created_at.asc())
+        if product_name:
+            stmt = stmt.where(models.InsightRun.product_name.ilike(f"%{product_name}%"))
+        if source_id is not None:
+            stmt = stmt.where(models.InsightRun.source_id == source_id)
+        if date_from is not None:
+            stmt = stmt.where(models.InsightRun.created_at >= date_from)
+        if date_to is not None:
+            stmt = stmt.where(models.InsightRun.created_at <= date_to)
+
+        runs = db.execute(stmt).scalars().all()
+        grouped: dict[str, list[float]] = defaultdict(list)
+        for run in runs:
+            key = run.created_at.date().isoformat()
+            grouped[key].append(float(run.confidence))
+
+        series = []
+        for day in sorted(grouped.keys()):
+            values = grouped[day]
+            series.append(
+                {
+                    "date": day,
+                    "runs": len(values),
+                    "avg_confidence": round(sum(values) / len(values), 3),
+                }
+            )
+        return series

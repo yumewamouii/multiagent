@@ -1,0 +1,82 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Поиск — Multiagent</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/ui/styles.css">
+</head>
+<body>
+  <div class="app-shell">
+    <header class="site-header">
+      <div class="header-inner">
+        <a href="/" class="brand" style="text-decoration:none;color:inherit">
+          <span class="brand-mark" aria-hidden="true">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
+              <path d="M4 19V5"/><path d="M4 19h16"/><path d="M8 17v-6"/><path d="M12 17V7"/><path d="M16 17v-3"/>
+            </svg>
+          </span>
+          Multiagent
+        </a>
+        <nav class="nav-desktop" aria-label="Основное меню">
+          <a href="/" data-nav="home">Главная</a>
+          <a href="/dashboard" data-nav="dashboard">Дашборд</a>
+          <a href="/product" data-nav="product">Инсайт по товару</a>
+          <a href="/search" data-nav="search">Поиск</a>
+          <a href="/queries" data-nav="queries">AI-запросы</a>
+        </nav>
+        <button type="button" class="menu-toggle" data-menu-toggle aria-expanded="false" aria-label="Открыть меню">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 6h16M4 12h16M4 18h16"/></svg>
+        </button>
+      </div>
+      <nav class="nav-mobile" data-menu-panel aria-label="Мобильное меню">
+        <a href="/" data-nav="home">Главная</a>
+        <a href="/dashboard" data-nav="dashboard">Дашборд</a>
+        <a href="/product" data-nav="product">Инсайт по товару</a>
+        <a href="/search" data-nav="search">Поиск</a>
+        <a href="/queries" data-nav="queries">AI-запросы</a>
+      </nav>
+    </header>
+
+    <main class="main-content">
+      <header class="page-header">
+        <h1>Поиск по базе знаний</h1>
+        <p class="lead">Семантический поиск фрагментов (чанков), связанных с отзывами. Минимум 2 символа в запросе.</p>
+      </header>
+
+      <div id="search-error" class="banner-error" role="alert"></div>
+
+      <section class="card">
+        <div class="form-grid" style="align-items:flex-end">
+          <div class="form-field" style="grid-column:1/-1;max-width:640px">
+            <label for="search-q">Запрос</label>
+            <input id="search-q" type="search" placeholder="Качество упаковки, срок доставки…" autocomplete="off">
+          </div>
+          <div class="form-field" style="max-width:140px">
+            <label for="search-topk">Результатов</label>
+            <input id="search-topk" type="number" value="8" min="1" max="20">
+          </div>
+          <div class="btn-row" style="flex:0">
+            <button type="button" class="btn btn-primary" id="search-btn">Найти</button>
+          </div>
+        </div>
+      </section>
+
+      <section class="mt-lg">
+        <div id="search-loading" class="muted" style="display:none;margin-bottom:16px"><span class="spinner"></span> Ищем…</div>
+        <ul id="search-results" class="citation-list"></ul>
+        <div id="search-empty" class="empty-state" style="display:none">Ничего не найдено. Уточните формулировку.</div>
+      </section>
+    </main>
+
+    <footer class="site-footer">
+      Multiagent UI · <a href="/search">Поиск</a>
+    </footer>
+  </div>
+  <script src="/ui/app.js"></script>
+  <script src="/ui/search.js"></script>
+</body>
+</html>

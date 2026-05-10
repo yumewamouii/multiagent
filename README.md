@@ -11,17 +11,33 @@
   - `sources` — источники отзывов (wildberries и пр.);
   - `reviews` — отзывы;
   - `knowledge_chunks` — фрагменты базы знаний (`summary/sentiment/tags + embedding`);
-  - `agent_profiles` — профили AI-агентов (включая `provider=gigachat`, `model_name`).
-- Ingestion-цепочка: парсер -> GigaChat (извлечение `review_text/rating/sentiment/summary/tags`) -> запись в `reviews` и `knowledge_chunks`.
+  - `agent_profiles` — профили AI-агентов (`provider`, `model_name`, `prompt_template`).
+- Ingestion-цепочка: парсер -> локальная LLM (извлечение `review_text/rating/sentiment/summary/tags`) -> запись в `reviews` и `knowledge_chunks`.
 - Непрерывное пополнение базы знаний в фоне (параллельно API-эндпоинтам).
+- Multi-agent LLM-оркестрация с ролями `router/worker/critic/summarizer`:
+  - у каждого агента отдельный системный промпт;
+  - собирается контекст из retrieved evidence;
+  - поддерживается локальный провайдер LM Studio (OpenAI-compatible API).
 
 
 ## Переменные окружения
 
 - `DATABASE_URL` — строка подключения к PostgreSQL.
   - по умолчанию: `postgresql+psycopg://postgres:postgres@localhost:5432/multiagent`
-- `GIGACHAT_API_KEY` — ключ для интеграции с API GigaChat.
 - `ENABLE_BACKGROUND_INGESTION` — включает непрерывный ingestion (`true`/`false`, по умолчанию `false`).
+- `LLM_PROVIDER` — провайдер LLM (используйте `lmstudio`).
+- `LMSTUDIO_BASE_URL` — URL LM Studio API (по умолчанию `http://127.0.0.1:1234/v1`).
+- `LMSTUDIO_MODEL` — id загруженной в LM Studio модели (например, `qwen2.5-7b-instruct`).
+- `LMSTUDIO_EMBEDDING_MODEL` — embedding-модель в LM Studio (по умолчанию `text-embedding-qwen3-embedding-4b`).
+- `LMSTUDIO_API_KEY` — bearer-токен для LM Studio (можно оставить `lm-studio`).
+- `LMSTUDIO_TIMEOUT_SEC` — таймаут вызова локальной модели.
+- `ENABLE_LLM_ROUTER` — включает LLM-маршрутизацию (`true`/`false`, по умолчанию `true`).
+- `EMBEDDING_VECTOR_SIZE` — размер вектора для записи в БД (по умолчанию `384`, должен совпадать с размером `pgvector` колонки).
+
+Проверка фонового парсера:
+- `GET /ingestion/status` — состояние фонового цикла, последний error, число источников;
+- `POST /ingestion/start` — запустить без перезапуска backend;
+- `POST /ingestion/stop` — остановить задачу ingestion.
 
 
 ## Запуск
@@ -145,3 +161,18 @@ curl -X POST http://127.0.0.1:8000/insights/dashboard/export \
 Dashboard теперь возвращает:
 - пагинацию: `page`, `page_size`, `total_pages`;
 - KPI для маркетинга: `review_count`, `avg_rating`, `negative_ratio`, `positive_ratio`.
+
+### 8) PNG-график по тренду инсайтов
+
+```bash
+curl -X POST http://127.0.0.1:8000/insights/dashboard/plot \
+  -H 'Content-Type: application/json' \
+  -d '{
+    "product_name": "Чайник",
+    "source_id": 1
+  }' --output dashboard.png
+```
+
+Вернет график по дням:
+- число запусков инсайтов;
+- средняя `confidence`.

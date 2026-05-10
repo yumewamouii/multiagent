@@ -1,4 +1,123 @@
-<!doctype html><html lang="ru"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Multiagent UI</title><link rel="stylesheet" href="/ui/styles.css"></head>
-<body><div class="container"><nav class="nav"><div class="brand">Multiagent Analytics</div><div><a href="/">Главная</a><a href="/dashboard">Дашборды</a><a href="/queries">AI Запросы</a></div></nav>
-<div class="card"><h1>Платформа аналитики отзывов</h1><p class="muted">Современный frontend для работы с инсайтами, дашбордами и AI-аналитикой.</p></div>
-<div class="grid grid-3" style="margin-top:18px"><div class="card"><h3>Дашборды</h3><p class="muted">KPI, графики тональности и история запусков.</p><a href="/dashboard"><button>Открыть</button></a></div><div class="card"><h3>AI Запросы</h3><p class="muted">Синхронные и асинхронные multi-agent запросы.</p><a href="/queries"><button>Открыть</button></a></div><div class="card"><h3>Экспорт</h3><p class="muted">Скачивание CSV для отчетов маркетинга.</p><a href="/dashboard"><button>Перейти</button></a></div></div></div></body></html>
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Multiagent — аналитика отзывов</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/ui/styles.css">
+</head>
+<body>
+  <div class="app-shell">
+    <header class="site-header">
+      <div class="header-inner">
+        <a href="/" class="brand" style="text-decoration:none;color:inherit">
+          <span class="brand-mark" aria-hidden="true">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
+              <path d="M4 19V5"/><path d="M4 19h16"/><path d="M8 17v-6"/><path d="M12 17V7"/><path d="M16 17v-3"/>
+            </svg>
+          </span>
+          Multiagent
+        </a>
+        <nav class="nav-desktop" aria-label="Основное меню">
+          <a href="/" data-nav="home">Главная</a>
+          <a href="/dashboard" data-nav="dashboard">Дашборд</a>
+          <a href="/product" data-nav="product">Инсайт по товару</a>
+          <a href="/search" data-nav="search">Поиск</a>
+          <a href="/queries" data-nav="queries">AI-запросы</a>
+        </nav>
+        <button type="button" class="menu-toggle" data-menu-toggle aria-expanded="false" aria-label="Открыть меню">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 6h16M4 12h16M4 18h16"/></svg>
+        </button>
+      </div>
+      <nav class="nav-mobile" data-menu-panel aria-label="Мобильное меню">
+        <a href="/" data-nav="home">Главная</a>
+        <a href="/dashboard" data-nav="dashboard">Дашборд</a>
+        <a href="/product" data-nav="product">Инсайт по товару</a>
+        <a href="/search" data-nav="search">Поиск</a>
+        <a href="/queries" data-nav="queries">AI-запросы</a>
+      </nav>
+    </header>
+
+    <main class="main-content">
+      <section class="hero">
+        <div class="hero-grid">
+          <div>
+            <h1>Аналитика отзывов и мультиагентные ответы</h1>
+            <p class="subtitle">
+              Единая панель для KPI по товарам, векторного поиска по базе знаний и оркестрации агентов с проверкой критиком.
+            </p>
+            <div class="hero-actions">
+              <a href="/dashboard"><button type="button" class="btn btn-primary">Открыть дашборд</button></a>
+              <a href="/queries"><button type="button" class="btn btn-secondary">Задать вопрос AI</button></a>
+            </div>
+            <p class="muted" style="margin-top:20px;font-size:0.9rem" id="health-line">Проверка API…</p>
+          </div>
+          <div class="preview-card">
+            <div class="preview-card-inner">
+              <div class="feature-icon" aria-hidden="true">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 20V10"/><path d="M18 20V4"/><path d="M6 20v-4"/></svg>
+              </div>
+              <h2 style="margin:0 0 10px;font-size:1.15rem">Что внутри</h2>
+              <ul class="muted" style="margin:0;padding-left:1.2rem;line-height:1.8">
+                <li>Фильтры по товару, источнику и датам</li>
+                <li>Экспорт инсайтов в CSV</li>
+                <li>RAG и multi-agent с цитатами</li>
+                <li>Глубокий инсайт по одному SKU</li>
+              </ul>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <div class="grid grid-3 mt-lg">
+        <article class="card">
+          <div class="feature-icon" aria-hidden="true">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/></svg>
+          </div>
+          <h3>Дашборд</h3>
+          <p class="muted" style="margin:0 0 16px">Сводка запусков инсайтов, средняя уверенность модели и распределение тональности по рейтингам.</p>
+          <a href="/dashboard"><button type="button" class="btn btn-primary" style="width:100%">Перейти</button></a>
+        </article>
+        <article class="card">
+          <div class="feature-icon" aria-hidden="true">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg>
+          </div>
+          <h3>Поиск по базе</h3>
+          <p class="muted" style="margin:0 0 16px">Семантический поиск чанков знаний: быстрый обзор релевантных отзывов без полного RAG-контура.</p>
+          <a href="/search"><button type="button" class="btn btn-primary" style="width:100%">Искать</button></a>
+        </article>
+        <article class="card">
+          <div class="feature-icon" aria-hidden="true">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
+          </div>
+          <h3>AI-запросы</h3>
+          <p class="muted" style="margin:0 0 16px">Синхронные и фоновые multi-agent запросы плюс классический RAG с метриками и цитатами.</p>
+          <a href="/queries"><button type="button" class="btn btn-primary" style="width:100%">Открыть</button></a>
+        </article>
+      </div>
+    </main>
+
+    <footer class="site-footer">
+      <span id="footer-status">Multiagent UI</span> · <a href="/docs" id="api-docs-link">OpenAPI</a> · <a href="/health">/health</a>
+    </footer>
+  </div>
+  <script src="/ui/app.js"></script>
+  <script>
+    (function () {
+      fetch("/health")
+        .then(function (r) { return r.json(); })
+        .then(function (d) {
+          document.getElementById("health-line").textContent = "API: " + (d.status || "ok");
+          document.getElementById("footer-status").textContent = "API доступен";
+        })
+        .catch(function () {
+          document.getElementById("health-line").textContent = "API недоступен — проверьте, что сервер запущен.";
+        });
+      document.getElementById("api-docs-link").href = "/docs";
+    })();
+  </script>
+</body>
+</html>

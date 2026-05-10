@@ -9,7 +9,7 @@ from fastapi.staticfiles import StaticFiles
 from sqlalchemy import select, text
 from sqlalchemy.orm import Session
 
-from app import agents
+from app import agents, observability
 from app import models, schemas, services
 from app.db import Base, engine, get_db
 
@@ -68,6 +68,16 @@ def frontend_queries():
     return FileResponse("app/frontend/queries.html")
 
 
+@app.get("/search")
+def frontend_search():
+    return FileResponse("app/frontend/search.html")
+
+
+@app.get("/product")
+def frontend_product():
+    return FileResponse("app/frontend/product.html")
+
+
 # ---------------------------
 # health
 # ---------------------------
@@ -77,6 +87,40 @@ def frontend_queries():
 def healthcheck():
 
     return {"status": "ok"}
+
+
+@app.get("/ingestion/status")
+def ingestion_status():
+    task = app.state.ingestion_task
+    return {
+        "enabled_by_env": os.getenv("ENABLE_BACKGROUND_INGESTION", "false").lower() == "true",
+        "task_running": bool(task and not task.done()),
+        "state": services.get_ingestion_state(),
+    }
+
+
+@app.post("/ingestion/start")
+async def ingestion_start():
+    task = app.state.ingestion_task
+    if task is not None and not task.done():
+        return {"status": "already_running"}
+    app.state.ingestion_stop_event = asyncio.Event()
+    app.state.ingestion_stop_event.clear()
+    app.state.ingestion_task = asyncio.create_task(
+        services.run_continuous_ingestion(app.state.ingestion_stop_event)
+    )
+    return {"status": "started"}
+
+
+@app.post("/ingestion/stop")
+async def ingestion_stop():
+    task = app.state.ingestion_task
+    if task is None or task.done():
+        return {"status": "already_stopped"}
+    app.state.ingestion_stop_event.set()
+    await task
+    app.state.ingestion_task = None
+    return {"status": "stopped"}
 
 
 # ---------------------------
@@ -92,6 +136,13 @@ def create_source(
     payload: schemas.SourceCreate,
     db: Session = Depends(get_db),
 ):
+    parser_aliases = {
+        "wildberries": "wb",
+        "wb_parser": "wb",
+        "wildberries_parser": "wb",
+    }
+    raw_parser_type = (payload.parser_type or "").strip().lower()
+    normalized_parser_type = parser_aliases.get(raw_parser_type, raw_parser_type or "html")
 
     exists = db.scalar(
         select(models.Source).where(
@@ -106,9 +157,9 @@ def create_source(
             detail="source already exists",
         )
 
-    source = models.Source(
-        **payload.model_dump()
-    )
+    source_data = payload.model_dump()
+    source_data["parser_type"] = normalized_parser_type
+    source = models.Source(**source_data)
 
     db.add(source)
 
@@ -309,6 +360,31 @@ def insights_dashboard_export(payload: schemas.DashboardQuery):
         )
     csv_data = "\n".join(rows)
     return Response(content=csv_data, media_type="text/csv")
+
+
+@app.post("/insights/dashboard/plot")
+def insights_dashboard_plot(payload: schemas.DashboardQuery):
+    series = services.get_dashboard_timeseries(
+        product_name=payload.product_name,
+        source_id=payload.source_id,
+        date_from=payload.date_from,
+        date_to=payload.date_to,
+    )
+    try:
+        png_data = observability.render_dashboard_plot(
+            series,
+            title="Insight runs and confidence trend",
+        )
+    except RuntimeError as exc:
+        if str(exc) == "matplotlib_not_installed":
+            raise HTTPException(
+                status_code=503,
+                detail="matplotlib is not installed. Install extra deps to enable plot export.",
+            ) from exc
+        raise
+    except ValueError:
+        raise HTTPException(status_code=404, detail="no data for selected filters")
+    return Response(content=png_data, media_type="image/png")
 
 
 @app.post(

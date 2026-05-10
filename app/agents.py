@@ -3,12 +3,15 @@ from dataclasses import dataclass
 from datetime import UTC, datetime
 from enum import Enum
 import json
+import os
 import uuid
 from uuid import uuid4
 
 from app import models
 from app.db import SessionLocal
 from app import services
+from app.llm import chat_completion, parse_json_response
+from app.observability import log_insight_to_mlflow
 
 
 class JobStatus(str, Enum):
@@ -84,6 +87,34 @@ class RouterAgent:
     role = "router"
 
     def choose_route(self, query: str) -> str:
+        if os.getenv("ENABLE_LLM_ROUTER", "true").lower() == "true":
+            system_prompt = (
+                "Ты агент-маршрутизатор. Выбери ОДИН маршрут из списка: "
+                "comparison, pros_cons, sentiment, product_lookup. "
+                "Верни только JSON: {\"route\":\"...\"}."
+            )
+            user_prompt = (
+                f"Запрос пользователя:\n{query}\n\n"
+                "Критерии:\n"
+                "- comparison: сравнение продуктов\n"
+                "- pros_cons: плюсы/минусы\n"
+                "- sentiment: тональность/эмоции\n"
+                "- product_lookup: общий поиск по продукту"
+            )
+            try:
+                raw = chat_completion(
+                    system_prompt=system_prompt,
+                    user_prompt=user_prompt,
+                    temperature=0.0,
+                    max_tokens=80,
+                )
+                payload = parse_json_response(raw) or {}
+                route = (payload.get("route") or "").strip()
+                if route in {"comparison", "pros_cons", "sentiment", "product_lookup"}:
+                    return route
+            except Exception:
+                pass
+
         lowered = query.lower()
 
         if any(token in lowered for token in ("сравни", "лучше", "хуже", "vs")):
@@ -120,7 +151,7 @@ class WorkerAgent:
 class CriticAgent:
     role = "critic"
 
-    def run(self, worker_result: WorkerResult) -> dict:
+    def run(self, query: str, worker_result: WorkerResult) -> dict:
         if not worker_result.chunks:
             return {
                 "passed": False,
@@ -128,19 +159,55 @@ class CriticAgent:
                 "notes": "no_relevant_chunks",
             }
 
-        non_empty_summaries = [
-            chunk for chunk in worker_result.chunks if (chunk.summary or "").strip()
-        ]
-        coverage_ratio = len(non_empty_summaries) / len(worker_result.chunks)
+        context_lines = []
+        for idx, chunk in enumerate(worker_result.chunks[:6], start=1):
+            product = chunk.review.product_name if chunk.review else "unknown"
+            summary = (chunk.summary or "").strip()[:180]
+            sentiment = chunk.sentiment or "neutral"
+            context_lines.append(f"[{idx}] {product} | {sentiment} | {summary}")
+        context = "\n".join(context_lines)
 
-        confidence = 0.55 + (0.35 * coverage_ratio)
-        confidence = min(confidence, 0.95)
+        system_prompt = (
+            "Ты агент-критик качества multi-agent пайплайна. "
+            "Оцени релевантность evidence к запросу. "
+            "Верни только JSON: {\"passed\": bool, \"confidence\": float, \"notes\": str}. "
+            "confidence в диапазоне [0,1]."
+        )
+        user_prompt = (
+            f"Запрос: {query}\n"
+            f"Маршрут: {worker_result.route}\n"
+            f"Контекст чанков:\n{context}"
+        )
+        try:
+            raw = chat_completion(
+                system_prompt=system_prompt,
+                user_prompt=user_prompt,
+                temperature=0.0,
+                max_tokens=120,
+            )
+            payload = parse_json_response(raw) or {}
+            if isinstance(payload.get("confidence"), (int, float)):
+                confidence = max(0.0, min(1.0, float(payload["confidence"])))
+            else:
+                confidence = 0.7
+            return {
+                "passed": bool(payload.get("passed", True)),
+                "confidence": round(confidence, 2),
+                "notes": str(payload.get("notes", "ok"))[:200],
+            }
+        except Exception:
+            non_empty_summaries = [
+                chunk for chunk in worker_result.chunks if (chunk.summary or "").strip()
+            ]
+            coverage_ratio = len(non_empty_summaries) / len(worker_result.chunks)
+            confidence = 0.55 + (0.35 * coverage_ratio)
+            confidence = min(confidence, 0.95)
 
-        return {
-            "passed": True,
-            "confidence": round(confidence, 2),
-            "notes": "ok",
-        }
+            return {
+                "passed": True,
+                "confidence": round(confidence, 2),
+                "notes": "fallback_heuristic",
+            }
 
 
 class SummarizerAgent:
@@ -161,6 +228,30 @@ class SummarizerAgent:
             bullet_points.append(f"- {product}: {summary} (sentiment: {sentiment})")
 
         details = "\n".join(bullet_points)
+        system_prompt = (
+            "Ты summarizer-агент продукта. "
+            "Сформируй короткий деловой ответ по evidence, не придумывай факты. "
+            "Если данных мало, явно скажи об этом."
+        )
+        user_prompt = (
+            f"Запрос: {query}\n"
+            f"Маршрут: {worker_result.route}\n"
+            f"Оценка критика: {critic_result}\n"
+            f"Evidence:\n{details}\n\n"
+            "Формат: 1 абзац + 3 буллета."
+        )
+        try:
+            output = chat_completion(
+                system_prompt=system_prompt,
+                user_prompt=user_prompt,
+                temperature=0.2,
+                max_tokens=420,
+            )
+            if output.strip():
+                return output.strip()
+        except Exception:
+            pass
+
         return (
             f"Маршрут: {worker_result.route}. "
             f"Уверенность критика: {critic_result['confidence']}.\n"
@@ -221,7 +312,7 @@ class MultiAgentRuntime:
             "evidence_ready",
             {"items": len(worker_result.chunks)},
         )
-        critic_result = self.critic.run(worker_result=worker_result)
+        critic_result = self.critic.run(query=query, worker_result=worker_result)
         self.mcp.send(
             self.critic.role,
             self.summarizer.role,
@@ -371,6 +462,15 @@ class MultiAgentRuntime:
                 db.add(event)
             db.commit()
             result["run_id"] = run.id
+            log_insight_to_mlflow(
+                run_id=run.id,
+                product_name=result["product_name"],
+                source_id=source_id,
+                confidence=float(result["critic"]["confidence"]),
+                citations_count=len(result.get("citations", [])),
+                top_tags_count=len(result.get("top_tags", [])),
+                route=result.get("route", "unknown"),
+            )
         finally:
             db.close()
 
@@ -443,3 +543,17 @@ def route_query(query: str) -> str:
 
 async def orchestrate(query: str, top_k: int = 5) -> dict:
     return await runtime.orchestrate(query=query, top_k=top_k)
+
+
+# Backward-compatible re-export of the new hierarchical ReAct runtime.
+from app.react_hierarchy import (  # noqa: E402
+    JobStatus,
+    MCPHub,
+    MCPMessage,
+    MultiAgentRuntime,
+    ToolRegistry,
+    WorkerResult,
+    orchestrate,
+    route_query,
+    runtime,
+)

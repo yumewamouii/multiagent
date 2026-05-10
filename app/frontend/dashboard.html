@@ -1,7 +1,150 @@
-<!doctype html><html lang="ru"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Dashboard</title><link rel="stylesheet" href="/ui/styles.css"><script src="https://cdn.jsdelivr.net/npm/chart.js"></script></head>
-<body><div class="container"><nav class="nav"><div class="brand">Dashboard</div><div><a href="/">Главная</a><a href="/dashboard">Дашборды</a><a href="/queries">AI Запросы</a></div></nav>
-<div class="card"><h2>Фильтры аналитики</h2><div class="form-row"><input id="product" placeholder="Название товара" value="Чайник"><input id="source" type="number" placeholder="Source ID"><button id="load">Загрузить</button><button id="export">Экспорт CSV</button></div></div>
-<div class="grid grid-3" style="margin-top:16px"><div class="card"><div class="muted">Review Count</div><div id="review_count" class="kpi">-</div></div><div class="card"><div class="muted">Avg Rating</div><div id="avg_rating" class="kpi">-</div></div><div class="card"><div class="muted">Negative Ratio</div><div id="negative_ratio" class="kpi">-</div></div></div>
-<div class="card" style="margin-top:16px"><canvas id="sentimentChart" height="90"></canvas></div>
-<div class="card" style="margin-top:16px"><h3>Последние инсайты</h3><table class="table"><thead><tr><th>ID</th><th>Товар</th><th>Confidence</th><th>Дата</th><th>Summary</th></tr></thead><tbody id="rows"></tbody></table></div>
-</div><script src="/ui/dashboard.js"></script></body></html>
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Дашборд — Multiagent</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/ui/styles.css">
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+</head>
+<body>
+  <div class="app-shell">
+    <header class="site-header">
+      <div class="header-inner">
+        <a href="/" class="brand" style="text-decoration:none;color:inherit">
+          <span class="brand-mark" aria-hidden="true">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
+              <path d="M4 19V5"/><path d="M4 19h16"/><path d="M8 17v-6"/><path d="M12 17V7"/><path d="M16 17v-3"/>
+            </svg>
+          </span>
+          Multiagent
+        </a>
+        <nav class="nav-desktop" aria-label="Основное меню">
+          <a href="/" data-nav="home">Главная</a>
+          <a href="/dashboard" data-nav="dashboard">Дашборд</a>
+          <a href="/product" data-nav="product">Инсайт по товару</a>
+          <a href="/search" data-nav="search">Поиск</a>
+          <a href="/queries" data-nav="queries">AI-запросы</a>
+        </nav>
+        <button type="button" class="menu-toggle" data-menu-toggle aria-expanded="false" aria-label="Открыть меню">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 6h16M4 12h16M4 18h16"/></svg>
+        </button>
+      </div>
+      <nav class="nav-mobile" data-menu-panel aria-label="Мобильное меню">
+        <a href="/" data-nav="home">Главная</a>
+        <a href="/dashboard" data-nav="dashboard">Дашборд</a>
+        <a href="/product" data-nav="product">Инсайт по товару</a>
+        <a href="/search" data-nav="search">Поиск</a>
+        <a href="/queries" data-nav="queries">AI-запросы</a>
+      </nav>
+    </header>
+
+    <main class="main-content">
+      <header class="page-header">
+        <h1>Дашборд инсайтов</h1>
+        <p class="lead">Фильтруйте запуски по товару, источнику и периоду. Смотрите KPI по отзывам и выгружайте отчёт в CSV.</p>
+      </header>
+
+      <div id="dash-error" class="banner-error" role="alert"></div>
+
+      <section class="card">
+        <h2>Фильтры</h2>
+        <div class="form-grid">
+          <div class="form-field">
+            <label for="product">Товар (подстрока)</label>
+            <input id="product" type="text" placeholder="Например: Чайник" autocomplete="off">
+          </div>
+          <div class="form-field">
+            <label for="source">ID источника</label>
+            <input id="source" type="number" min="1" placeholder="Необязательно">
+          </div>
+          <div class="form-field">
+            <label for="date_from">Дата с</label>
+            <input id="date_from" type="datetime-local">
+          </div>
+          <div class="form-field">
+            <label for="date_to">Дата по</label>
+            <input id="date_to" type="datetime-local">
+          </div>
+        </div>
+        <div class="btn-row" style="margin-top:18px">
+          <button type="button" class="btn btn-primary" id="load"><span id="load-label">Загрузить</span></button>
+          <button type="button" class="btn btn-secondary" id="export">Экспорт CSV</button>
+          <button type="button" class="btn btn-ghost" id="reset">Сбросить даты</button>
+        </div>
+      </section>
+
+      <div class="grid grid-4 mt-lg">
+        <article class="card card-tight stat">
+          <span class="stat-label">Отзывов</span>
+          <span class="stat-value" id="review_count">—</span>
+          <span class="stat-hint">в выборке</span>
+        </article>
+        <article class="card card-tight stat">
+          <span class="stat-label">Средний рейтинг</span>
+          <span class="stat-value" id="avg_rating">—</span>
+          <span class="stat-hint">по звёздам</span>
+        </article>
+        <article class="card card-tight stat">
+          <span class="stat-label">Средняя уверенность</span>
+          <span class="stat-value" id="avg_confidence">—</span>
+          <span class="stat-hint">инсайты</span>
+        </article>
+        <article class="card card-tight stat">
+          <span class="stat-label">Запусков инсайтов</span>
+          <span class="stat-value" id="total_runs">—</span>
+          <span class="stat-hint">всего по фильтру</span>
+        </article>
+      </div>
+
+      <div class="grid grid-2 mt-lg">
+        <section class="card chart-card">
+          <h3>Тональность по рейтингу</h3>
+          <p class="muted" style="font-size:0.85rem;margin-top:-8px;margin-bottom:12px">Доля положительных (≥4), отрицательных (≤2) и нейтральных отзывов.</p>
+          <canvas id="sentimentChart" aria-label="Диаграмма тональности"></canvas>
+        </section>
+        <section class="card">
+          <h3>Быстрые ориентиры</h3>
+          <p class="muted" style="margin:0 0 12px;font-size:0.9rem">Доля негатива среди отзывов в выборке (по рейтингу ≤2).</p>
+          <p style="font-size:2rem;font-weight:700;margin:0" id="negative_ratio_big">—</p>
+          <p class="muted" style="margin-top:16px;font-size:0.9rem">Положительные (≥4): <strong id="positive_ratio_big">—</strong></p>
+        </section>
+      </div>
+
+      <section class="card mt-lg">
+        <h2>История инсайтов</h2>
+        <div class="table-wrap">
+          <table class="table">
+            <thead>
+              <tr>
+                <th>Run</th>
+                <th>Товар</th>
+                <th>Источник</th>
+                <th>Уверенность</th>
+                <th>Дата</th>
+                <th>Кратко</th>
+              </tr>
+            </thead>
+            <tbody id="rows"></tbody>
+          </table>
+        </div>
+        <div id="empty-table" class="empty-state" style="display:none">Нет записей по текущим фильтрам.</div>
+        <div class="pagination">
+          <span class="info" id="page-info"></span>
+          <button type="button" class="btn btn-secondary" id="prev-page" disabled>Назад</button>
+          <button type="button" class="btn btn-secondary" id="next-page" disabled>Вперёд</button>
+        </div>
+      </section>
+    </main>
+
+    <footer class="site-footer">
+      Multiagent UI · <a href="/dashboard">Дашборд</a>
+    </footer>
+  </div>
+  <script src="/ui/app.js"></script>
+  <script src="/ui/dashboard.js"></script>
+</body>
+</html>

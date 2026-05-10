@@ -53,8 +53,8 @@ class AgentProfile(Base):
     id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
     name: Mapped[str] = mapped_column(String(64), unique=True, nullable=False)
     role: Mapped[str] = mapped_column(String(128), nullable=False)
-    provider: Mapped[str] = mapped_column(String(64), nullable=False, default="gigachat")
-    model_name: Mapped[str] = mapped_column(String(128), nullable=False, default="GigaChat")
+    provider: Mapped[str] = mapped_column(String(64), nullable=False, default="lmstudio")
+    model_name: Mapped[str] = mapped_column(String(128), nullable=False, default="local-model")
     prompt_template: Mapped[str] = mapped_column(Text, nullable=False)
     toolset: Mapped[str] = mapped_column(String(256), default="", nullable=False)
 
