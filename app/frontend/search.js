@@ -29,6 +29,7 @@
     loading.style.display = "block";
     list.innerHTML = "";
     empty.style.display = "none";
+    document.getElementById("search-query-panel").style.display = "none";
 
     try {
       var url = "/knowledge/search?query=" + encodeURIComponent(q) + "&top_k=" + topk;
@@ -37,17 +38,43 @@
       if (!res.ok) throw new Error(typeof data.detail === "string" ? data.detail : JSON.stringify(data.detail || data));
 
       loading.style.display = "none";
-      if (!data.length) {
+
+      var panel = document.getElementById("search-query-panel");
+      var qText = document.getElementById("search-query-text");
+      var qMeta = document.getElementById("search-meta");
+      var items = data.items || [];
+
+      panel.style.display = "block";
+      qText.textContent = data.query || q;
+      qMeta.textContent =
+        "top_k=" +
+        (data.top_k != null ? data.top_k : topk) +
+        " · эмбеддинг: " +
+        (data.embedding_ok ? "да" : "нет") +
+        " · найдено чанков: " +
+        items.length;
+
+      if (!items.length) {
         empty.style.display = "block";
         return;
       }
 
-      data.forEach(function (item) {
+      items.forEach(function (item) {
         var li = document.createElement("li");
         li.className = "citation-card";
+        var sim =
+          item.similarity != null
+            ? '<span class="badge" style="background:rgba(37,99,235,0.12);color:#1d4ed8;font-weight:600">similarity ' +
+              Number(item.similarity).toFixed(4) +
+              "</span>"
+            : "";
         li.innerHTML =
-          '<div class="meta">Отзыв #' +
+          '<div class="meta">chunk #' +
+          (item.chunk_id != null ? item.chunk_id : "—") +
+          " · отзыв #" +
           item.review_id +
+          " · " +
+          sim +
           " · " +
           escapeHtml(item.product_name || "") +
           ' · <span class="badge ' +

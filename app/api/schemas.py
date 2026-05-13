@@ -97,6 +97,24 @@ class MultiAgentJobStatus(BaseModel):
     result: MultiAgentResponse | None = None
 
 
+class KnowledgeSearchItem(BaseModel):
+    chunk_id: int
+    review_id: int
+    similarity: float = Field(description="Cosine similarity запроса и эмбеддинга чанка, 0..1")
+    product_name: str | None = None
+    summary: str
+    sentiment: str
+    tags: str
+    review_text: str | None = None
+
+
+class KnowledgeSearchResponse(BaseModel):
+    query: str
+    top_k: int
+    embedding_ok: bool
+    items: list[KnowledgeSearchItem]
+
+
 class RagQuery(BaseModel):
     query: str = Field(min_length=2)
     top_k: int = Field(default=5, ge=1, le=20)
@@ -104,6 +122,7 @@ class RagQuery(BaseModel):
 
 class RagCitation(BaseModel):
     rank: int
+    chunk_id: int | None = None
     review_id: int
     product_name: str
     summary: str
@@ -111,6 +130,8 @@ class RagCitation(BaseModel):
     tags: str
     source_id: int | None = None
     collected_at: str | None = None
+    semantic_similarity: float | None = None
+    rerank_score: float | None = None
 
 
 class RagResponse(BaseModel):

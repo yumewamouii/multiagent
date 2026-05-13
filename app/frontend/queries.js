@@ -87,11 +87,29 @@
     var cit = data.citations || [];
     var citHtml = cit
       .map(function (c) {
+        var scores = [];
+        if (c.semantic_similarity != null && c.semantic_similarity !== undefined) {
+          scores.push("cosine " + Number(c.semantic_similarity).toFixed(4));
+        }
+        if (c.rerank_score != null && c.rerank_score !== undefined) {
+          scores.push("rerank " + Number(c.rerank_score).toFixed(4));
+        }
+        var scoreStr =
+          scores.length > 0
+            ? ' · <span style="font-weight:600;color:#1d4ed8">' + scores.join(" · ") + "</span>"
+            : "";
+        var ck =
+          c.chunk_id != null && c.chunk_id !== undefined
+            ? "chunk #" + c.chunk_id + " · "
+            : "";
         return (
           '<li class="citation-card"><div class="meta">#' +
           c.rank +
-          " · review " +
+          " · " +
+          ck +
+          "review " +
           c.review_id +
+          scoreStr +
           " · " +
           escapeHtml(c.product_name || "") +
           ' · <span class="badge ' +
@@ -116,12 +134,21 @@
             .join(", ") +
           "</p>"
         : "";
+    var qLine =
+      '<p class="muted" style="margin-top:0;font-size:0.92rem">Запрос (RAG): <strong style="color:inherit">' +
+      escapeHtml(data.query || "") +
+      "</strong></p>";
     outStructured.innerHTML =
+      qLine +
       metricsHtml +
       '<div class="prose" style="margin:16px 0">' +
       escapeHtml(data.answer || "").replace(/\n/g, "<br>") +
       "</div>" +
-      (cit.length ? "<h3 style=\"font-size:1rem;margin:20px 0 10px\">Цитаты</h3><ul class=\"citation-list\">" + citHtml + "</ul>" : "");
+      (cit.length
+        ? "<h3 style=\"font-size:1rem;margin:20px 0 10px\">Найденные чанки и оценки</h3><ul class=\"citation-list\">" +
+          citHtml +
+          "</ul>"
+        : "");
   }
 
   document.querySelectorAll(".tab-btn").forEach(function (btn) {

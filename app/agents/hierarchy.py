@@ -8,10 +8,11 @@ from enum import Enum
 from typing import Any, TypedDict
 from uuid import uuid4
 
-from app import models, services
-from app.db import SessionLocal
-from app.llm import chat_completion, parse_json_response
-from app.observability import log_insight_to_mlflow
+import app.models.orm as models
+import app.services.operations as services
+from app.core.db import SessionLocal
+from app.core.llm import chat_completion, parse_json_response
+from app.utils.observability import log_insight_to_mlflow
 
 try:
     from langgraph.graph import END, START, StateGraph
@@ -35,7 +36,6 @@ class WorkerResult:
 
 
 def _mcp_payload_to_jsonable(obj: Any) -> Any:
-    """Make MCP message payloads safe for json.dumps (DB persistence, API)."""
     if obj is None or isinstance(obj, (str, int, float, bool)):
         return obj
     if isinstance(obj, datetime):

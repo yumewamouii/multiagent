@@ -1,4 +1,4 @@
-from app import services
+import app.services.operations as services
 
 
 def test_extract_json_returns_dict():

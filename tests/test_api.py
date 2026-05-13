@@ -1,3 +1,5 @@
+import uuid
+
 from fastapi.testclient import TestClient
 
 from app.main import app
@@ -16,7 +18,7 @@ def test_ingest_pipeline_and_search():
     source = client.post(
         '/sources',
         json={
-            'name': 'otzovik-test',
+            'name': f'otzovik-test-{uuid.uuid4().hex[:8]}',
             'base_url': 'https://otzovik.com',
             'parser_type': 'html',
         },
@@ -40,8 +42,10 @@ def test_ingest_pipeline_and_search():
     search = client.get('/knowledge/search', params={'query': 'чайник'})
     assert search.status_code == 200
     data = search.json()
-    assert len(data) >= 1
-    assert data[0]['product_name'] == 'Тестовый чайник'
+    assert 'items' in data
+    assert len(data['items']) >= 1
+    assert data['items'][0]['product_name'] == 'Тестовый чайник'
+    assert 'similarity' in data['items'][0]
 
 
 def test_multiagent_query_contract(monkeypatch):

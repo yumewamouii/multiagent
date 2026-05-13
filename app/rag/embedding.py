@@ -19,7 +19,6 @@ def _fit_vector_size(vector: list[float], target_size: int) -> list[float]:
             target_size,
         )
         return vector[:target_size]
-    # Keep runtime stable with existing pgvector size. Prefer DB migration for full-size vectors.
     return vector + [0.0] * (target_size - len(vector))
 
 

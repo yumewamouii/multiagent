@@ -10,20 +10,22 @@ from datetime import datetime
 from typing import Any
 
 from sqlalchemy import select
-from sqlalchemy.orm import Session, selectinload
+from sqlalchemy.orm import Session
 
 
-from app import models
-from app.db import SessionLocal
-
+import app.models.orm as models
+from app.core.db import SessionLocal
+from app.core.llm import chat_completion, parse_json_response
+from app.models.orm import KnowledgeChunk
 from app.parsers.wildberries.crawler import get_product_ids
 from app.parsers.wildberries.parser import parse_product
-
-from app.ai.embedding import create_embedding
-from app.llm import chat_completion, parse_json_response
-
-
-from app.models import KnowledgeChunk
+from app.rag.embedding import create_embedding
+from app.rag.retrieval import (
+    dedupe_chunks_by_review,
+    hybrid_rerank_chunks,
+    keyword_search_chunks,
+    semantic_search_chunks,
+)
 
 
 import logging
@@ -437,95 +439,8 @@ def get_ingestion_state() -> dict[str, Any]:
     return dict(INGESTION_STATE)
 
 
-async def search_chunks(
-    query: str,
-    top_k: int = 5,
-    source_id: int | None = None,
-    date_from: datetime | None = None,
-    date_to: datetime | None = None,
-):
-    # создаём embedding запроса точно так же, как для chunk
-    query_embedding = create_embedding(f"query: {query}")
-
-    if query_embedding is None:
-        return []
-
-    def db_query():
-        with SessionLocal() as db:
-            stmt = (
-                select(KnowledgeChunk)
-                .join(KnowledgeChunk.review)
-                .options(selectinload(KnowledgeChunk.review))
-            )
-            if source_id is not None:
-                stmt = stmt.where(models.Review.source_id == source_id)
-            if date_from is not None:
-                stmt = stmt.where(models.Review.collected_at >= date_from)
-            if date_to is not None:
-                stmt = stmt.where(models.Review.collected_at <= date_to)
-
-            stmt = stmt.order_by(
-                KnowledgeChunk.embedding.cosine_distance(query_embedding)
-            ).limit(top_k)
-
-            return db.execute(stmt).scalars().all()
-
-    import asyncio
-    return await asyncio.to_thread(db_query)
-
-
-async def search_chunks_keyword(
-    query: str,
-    top_k: int = 5,
-    source_id: int | None = None,
-    date_from: datetime | None = None,
-    date_to: datetime | None = None,
-):
-    def db_query():
-        with SessionLocal() as db:
-            pattern = f"%{query}%"
-            stmt = (
-                select(KnowledgeChunk)
-                .join(KnowledgeChunk.review)
-                .options(selectinload(KnowledgeChunk.review))
-                .where(
-                    models.Review.product_name.ilike(pattern)
-                    | models.Review.body.ilike(pattern)
-                    | KnowledgeChunk.summary.ilike(pattern)
-                    | KnowledgeChunk.tags.ilike(pattern)
-                )
-            )
-            if source_id is not None:
-                stmt = stmt.where(models.Review.source_id == source_id)
-            if date_from is not None:
-                stmt = stmt.where(models.Review.collected_at >= date_from)
-            if date_to is not None:
-                stmt = stmt.where(models.Review.collected_at <= date_to)
-            stmt = stmt.limit(top_k)
-            return db.execute(stmt).scalars().all()
-
-    return await asyncio.to_thread(db_query)
-
-
-def _dedupe_chunks(chunks: list[KnowledgeChunk]) -> list[KnowledgeChunk]:
-    seen_review_ids = set()
-    unique = []
-    for chunk in chunks:
-        if chunk.review_id in seen_review_ids:
-            continue
-        seen_review_ids.add(chunk.review_id)
-        unique.append(chunk)
-    return unique
-
-
-def _keyword_overlap_score(query: str, text: str) -> float:
-    q_tokens = {token for token in re.findall(r"\w+", query.lower()) if len(token) > 2}
-    if not q_tokens:
-        return 0.0
-    t_tokens = set(re.findall(r"\w+", text.lower()))
-    if not t_tokens:
-        return 0.0
-    return len(q_tokens.intersection(t_tokens)) / len(q_tokens)
+search_chunks = semantic_search_chunks
+search_chunks_keyword = keyword_search_chunks
 
 
 def _build_context(chunks: list[KnowledgeChunk]) -> str:
@@ -581,28 +496,27 @@ async def rag_answer(
         date_from=date_from,
         date_to=date_to,
     )
-    retrieved = _dedupe_chunks(vector_candidates + keyword_candidates)
+    retrieved = dedupe_chunks_by_review(vector_candidates + keyword_candidates)
 
-    # 2) rerank: гибридный скоринг (keyword overlap + ранжирование retrieval)
-    vector_ranks = {chunk.review_id: idx for idx, chunk in enumerate(vector_candidates)}
-    keyword_ranks = {chunk.review_id: idx for idx, chunk in enumerate(keyword_candidates)}
+    # 2) rerank: cosine similarity(query, chunk_embedding) + lexical + слабые rank-бонусы
+    vector_rank_by_review = {c.review_id: idx for idx, c in enumerate(vector_candidates)}
+    keyword_rank_by_review = {c.review_id: idx for idx, c in enumerate(keyword_candidates)}
+    query_embedding = create_embedding(f"query: {query}")
 
-    scored = []
-    for chunk in retrieved:
-        product = chunk.review.product_name if chunk.review else ""
-        body = chunk.review.body if chunk.review else ""
-        combined_text = f"{product} {chunk.summary} {body}"
-
-        overlap = _keyword_overlap_score(query, combined_text)
-        vec_rank = vector_ranks.get(chunk.review_id, candidate_k)
-        key_rank = keyword_ranks.get(chunk.review_id, candidate_k)
-        vec_bonus = max(0.0, 1.0 - (vec_rank * 0.06))
-        key_bonus = max(0.0, 1.0 - (key_rank * 0.06))
-        score = (0.50 * overlap) + (0.30 * vec_bonus) + (0.20 * key_bonus)
-        scored.append((score, chunk))
-
-    scored.sort(key=lambda item: item[0], reverse=True)
-    reranked = [chunk for _, chunk in scored[:top_k]]
+    ranked = hybrid_rerank_chunks(
+        query_text=query,
+        query_embedding=query_embedding,
+        chunks=retrieved,
+        vector_rank_by_review=vector_rank_by_review,
+        keyword_rank_by_review=keyword_rank_by_review,
+        candidate_k=candidate_k,
+        top_k=top_k,
+    )
+    reranked = [chunk for chunk, _, _ in ranked]
+    rerank_details = {
+        (getattr(chunk, "id", None) if getattr(chunk, "id", None) is not None else chunk.review_id): detail
+        for chunk, _, detail in ranked
+    }
 
     # 3) generate: grounded answer with citations
     context = _build_context(reranked)
@@ -610,9 +524,12 @@ async def rag_answer(
 
     citations = []
     for i, chunk in enumerate(reranked, start=1):
+        ck = getattr(chunk, "id", None)
+        detail = rerank_details.get(ck if ck is not None else chunk.review_id, {})
         citations.append(
             {
                 "rank": i,
+                "chunk_id": getattr(chunk, "id", None),
                 "review_id": chunk.review_id,
                 "product_name": chunk.review.product_name if chunk.review else "",
                 "summary": chunk.summary,
@@ -620,6 +537,8 @@ async def rag_answer(
                 "tags": chunk.tags,
                 "source_id": chunk.review.source_id if chunk.review else None,
                 "collected_at": chunk.review.collected_at.isoformat() if chunk.review and chunk.review.collected_at else None,
+                "semantic_similarity": round(float(detail.get("semantic_similarity", 0.0)), 4),
+                "rerank_score": round(float(detail.get("rerank_score", 0.0)), 4),
             }
         )
 

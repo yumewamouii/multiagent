@@ -1,12 +1,24 @@
 import asyncio
+from datetime import UTC, datetime
 from types import SimpleNamespace
 
-from app import agents
+import app.agents.hierarchy as agents
 
 
 def test_orchestrate_returns_expected_shape(monkeypatch):
-    async def fake_search_chunks(query: str, top_k: int = 5):
-        review = SimpleNamespace(product_name="Тестовый товар", body="Текст")
+    async def fake_search_chunks(
+        query: str,
+        top_k: int = 5,
+        source_id: int | None = None,
+        date_from=None,
+        date_to=None,
+    ):
+        review = SimpleNamespace(
+            product_name="Тестовый товар",
+            body="Текст",
+            source_id=1,
+            collected_at=datetime.now(UTC),
+        )
         chunk = SimpleNamespace(
             review_id=42,
             summary="Короткая выжимка",
@@ -16,7 +28,11 @@ def test_orchestrate_returns_expected_shape(monkeypatch):
         )
         return [chunk]
 
-    monkeypatch.setattr("app.agents.services.search_chunks", fake_search_chunks)
+    monkeypatch.setattr("app.services.operations.search_chunks", fake_search_chunks)
+    monkeypatch.setattr("app.services.operations.search_chunks_keyword", fake_search_chunks)
+    # ToolRegistry хранит ссылки на функции при старте — обновляем явно.
+    agents.runtime.tools.tools["vector_search"] = fake_search_chunks
+    agents.runtime.tools.tools["keyword_search"] = fake_search_chunks
 
     result = asyncio.run(agents.orchestrate("что по товару", top_k=3))
 
@@ -40,7 +56,7 @@ def test_runtime_submit_creates_queued_job():
 
 def test_product_insight_uses_tools_and_mcp_flow():
     runtime = agents.MultiAgentRuntime()
-    runtime._persist_insight_run = lambda **kwargs: None
+    runtime._persist_insight_run = lambda *args, **kwargs: None
 
     async def fake_rag(query: str, top_k: int = 8, source_id=None, date_from=None, date_to=None):
         return {
@@ -59,7 +75,7 @@ def test_product_insight_uses_tools_and_mcp_flow():
             "metrics": {"latency_ms": 10, "retrieved_candidates": 1, "vector_candidates": 1, "keyword_candidates": 0},
         }
 
-    runtime.tools.register("rag_query", fake_rag)
+    runtime.tools.register("rag_query", fake_rag, owner="test")
     result = asyncio.run(runtime.product_insight("Товар", top_k=5))
 
     assert result["product_name"] == "Товар"

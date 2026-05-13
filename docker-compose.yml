@@ -1,0 +1,44 @@
+x-external-for-report:
+  llm_embeddings:
+    description: "Чат и эмбеддинги через HTTP (LMSTUDIO_BASE_URL, см. app/llm.py, app/ai/embedding.py)."
+    default_url: "http://127.0.0.1:1234/v1"
+  application:
+    description: "FastAPI (uvicorn), монтирует UI из app/frontend; переменная DATABASE_URL."
+
+services:
+  postgres:
+    image: pgvector/pgvector:pg16
+    container_name: multiagent-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: multiagent
+    ports:
+      - "5433:5432"
+    volumes:
+      - multiagent_pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d multiagent"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+  mlflow:
+    profiles: ["observability"]
+    image: ghcr.io/mlflow/mlflow:v2.14.1
+    container_name: multiagent-mlflow
+    restart: unless-stopped
+    command: >
+      mlflow server
+      --host 0.0.0.0
+      --port 5000
+      --backend-store-uri sqlite:////mlflow/mlflow.db
+      --default-artifact-root /mlflow/artifacts
+    ports:
+      - "5000:5000"
+    volumes:
+      - multiagent_mlflow:/mlflow
+
+volumes:
+  multiagent_pgdata:
+  multiagent_mlflow:
