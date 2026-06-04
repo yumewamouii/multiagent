@@ -1,108 +1,118 @@
 (function () {
-  function escapeHtml(s) {
-    return String(s == null ? "" : s)
-      .replace(/&/g, "&amp;")
-      .replace(/</g, "&lt;")
-      .replace(/>/g, "&gt;");
+  "use strict";
+  const UI = window.MultiagentUI;
+  const $ = (id) => document.getElementById(id);
+  const esc = UI.escapeHtml;
+
+  function collectKinds() {
+    const out = [];
+    if ($("srch-kind-review").checked) out.push("review");
+    if ($("srch-kind-doctor").checked) out.push("doctor");
+    if ($("srch-kind-service").checked) out.push("service");
+    return out.length ? out : null;
   }
 
-  function sentimentClass(s) {
-    var t = (s || "").toLowerCase();
-    if (t.indexOf("neg") >= 0) return "badge-neg";
-    if (t.indexOf("pos") >= 0) return "badge-pos";
-    return "badge-neu";
+  function renderItem(it) {
+    const meta = [];
+    if (it.kind) meta.push('<span class="tag">' + esc(it.kind) + "</span>");
+    if (it.score != null) meta.push('<span class="muted">score ' + Number(it.score).toFixed(3) + "</span>");
+    if (it.semantic_similarity != null) meta.push('<span class="muted">sem ' + Number(it.semantic_similarity).toFixed(3) + "</span>");
+    if (it.lexical_overlap != null) meta.push('<span class="muted">lex ' + Number(it.lexical_overlap).toFixed(3) + "</span>");
+    if (it.rating_value != null) meta.push('<span class="tag">rating ' + esc(String(it.rating_value)) + "</span>");
+    if (it.clinic_name) meta.push('<span class="tag">' + esc(it.clinic_name) + "</span>");
+    if (it.service_name) meta.push('<span class="tag">' + esc(it.service_name) + "</span>");
+    if (it.doctor_name) meta.push('<span class="tag">' + esc(it.doctor_name) + "</span>");
+
+    const link = it.source_page_url
+      ? ' · <a href="' + esc(it.source_page_url) + '" target="_blank" rel="noreferrer">источник</a>'
+      : "";
+
+    return (
+      '<div class="snippet">' +
+      '<div class="snippet-title">' + esc(it.title || "(без названия)") + link + "</div>" +
+      "<div>" + esc(it.snippet || "") + "</div>" +
+      '<div class="snippet-meta">' + meta.join(" ") + "</div>" +
+      "</div>"
+    );
   }
 
-  async function runSearch() {
-    window.MultiagentUI.hideBanner("search-error");
-    var q = document.getElementById("search-q").value.trim();
-    var topk = Number(document.getElementById("search-topk").value || 8);
-    var list = document.getElementById("search-results");
-    var empty = document.getElementById("search-empty");
-    var loading = document.getElementById("search-loading");
+  // ---- preset queries ----
+  Array.from(document.querySelectorAll(".chip-btn[data-q]")).forEach(function (b) {
+    b.addEventListener("click", function () {
+      $("srch-query").value = b.dataset.q;
+      $("srch-query").focus();
+    });
+  });
 
+  // ---- autocomplete для фильтров ----
+  async function refreshFilterOptions() {
+    const tasks = [
+      ["clinic", "srch-clinic-options"],
+      ["service", "srch-service-options"],
+      ["category", "srch-cat-options"],
+    ];
+    for (const [type, listId] of tasks) {
+      const { items } = await UI.loadEntitiesWithFallback(type, { limit: 50 });
+      UI.fillDatalist(listId, items);
+    }
+  }
+  UI.whenReady(refreshFilterOptions);
+  window.addEventListener("data-source-changed", refreshFilterOptions);
+
+  $("srch-run").addEventListener("click", async () => {
+    UI.showBanner("srch-error", "");
+    const q = $("srch-query").value.trim();
     if (q.length < 2) {
-      window.MultiagentUI.showBanner("search-error", "Запрос должен содержать минимум 2 символа.");
+      UI.showBanner("srch-error", "Введите минимум 2 символа.");
       return;
     }
+    const ds = UI.DataSource.get();
+    const body = {
+      query: q,
+      top_k: Number($("srch-top-k").value),
+      kinds: collectKinds(),
+      city_slug: ($("srch-city").value.trim() || ds.city_slug) || null,
+      clinic_alias: $("srch-clinic-alias").value.trim() || null,
+      service_name: $("srch-service-name").value.trim() || null,
+      parent_service_name: $("srch-parent-service").value.trim() || null,
+      source_id: $("srch-source-id").value ? Number($("srch-source-id").value) : null,
+    };
 
-    loading.style.display = "block";
-    list.innerHTML = "";
-    empty.style.display = "none";
-    document.getElementById("search-query-panel").style.display = "none";
+    $("srch-loading").style.display = "block";
+    $("srch-result").style.display = "none";
+    $("srch-run").disabled = true;
 
     try {
-      var url = "/knowledge/search?query=" + encodeURIComponent(q) + "&top_k=" + topk;
-      var res = await fetch(url);
-      var data = await res.json();
-      if (!res.ok) throw new Error(typeof data.detail === "string" ? data.detail : JSON.stringify(data.detail || data));
-
-      loading.style.display = "none";
-
-      var panel = document.getElementById("search-query-panel");
-      var qText = document.getElementById("search-query-text");
-      var qMeta = document.getElementById("search-meta");
-      var items = data.items || [];
-
-      panel.style.display = "block";
-      qText.textContent = data.query || q;
-      qMeta.textContent =
-        "top_k=" +
-        (data.top_k != null ? data.top_k : topk) +
-        " · эмбеддинг: " +
-        (data.embedding_ok ? "да" : "нет") +
-        " · найдено чанков: " +
-        items.length;
-
-      if (!items.length) {
-        empty.style.display = "block";
+      const data = await UI.api("POST", "/docdoc/rag/search", body);
+      if (!data.ok) {
+        UI.showBanner("srch-error", "Ошибка: " + (data.error || "unknown"));
         return;
       }
-
-      items.forEach(function (item) {
-        var li = document.createElement("li");
-        li.className = "citation-card";
-        var sim =
-          item.similarity != null
-            ? '<span class="badge" style="background:rgba(37,99,235,0.12);color:#1d4ed8;font-weight:600">similarity ' +
-              Number(item.similarity).toFixed(4) +
-              "</span>"
-            : "";
-        li.innerHTML =
-          '<div class="meta">chunk #' +
-          (item.chunk_id != null ? item.chunk_id : "—") +
-          " · отзыв #" +
-          item.review_id +
-          " · " +
-          sim +
-          " · " +
-          escapeHtml(item.product_name || "") +
-          ' · <span class="badge ' +
-          sentimentClass(item.sentiment) +
-          '">' +
-          escapeHtml(item.sentiment || "") +
-          "</span>" +
-          (item.tags ? " · " + escapeHtml(item.tags || "") : "") +
-          "</div>" +
-          '<div style="margin-bottom:8px;font-weight:500">' +
-          escapeHtml(item.summary || "") +
-          "</div>" +
-          (item.review_text
-            ? '<div class="muted" style="font-size:0.88rem;line-height:1.5">' +
-              escapeHtml(item.review_text || "").slice(0, 800) +
-              (item.review_text.length > 800 ? "…" : "") +
-              "</div>"
-            : "");
-        list.appendChild(li);
-      });
+      $("srch-result-title").textContent = "Результаты (" + (data.items ? data.items.length : 0) + ")";
+      const meta = [];
+      if (data.candidate_count != null) meta.push("кандидатов: " + data.candidate_count);
+      if (data.top_k != null) meta.push("top_k: " + data.top_k);
+      if (data.embedding_ok != null) meta.push("embedding: " + (data.embedding_ok ? "ok" : "fallback на keyword"));
+      $("srch-result-meta").textContent = meta.join(" · ");
+      const items = data.items || [];
+      if (!items.length) {
+        $("srch-items").innerHTML = '<p class="muted">Ничего не найдено. Возможно, индекс ещё не построен — зайдите на <a href="/dashboard">дашборд</a> и нажмите «Построить индекс».</p>';
+      } else {
+        $("srch-items").innerHTML = items.map(renderItem).join("");
+      }
+      $("srch-result").style.display = "block";
     } catch (e) {
-      loading.style.display = "none";
-      window.MultiagentUI.showBanner("search-error", "Ошибка: " + (e.message || String(e)));
+      UI.showBanner("srch-error", e.message);
+    } finally {
+      $("srch-loading").style.display = "none";
+      $("srch-run").disabled = false;
     }
-  }
+  });
 
-  document.getElementById("search-btn").onclick = runSearch;
-  document.getElementById("search-q").addEventListener("keydown", function (ev) {
-    if (ev.key === "Enter") runSearch();
+  $("srch-query").addEventListener("keydown", function (e) {
+    if (e.key === "Enter" && !e.shiftKey) {
+      e.preventDefault();
+      $("srch-run").click();
+    }
   });
 })();

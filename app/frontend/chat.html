@@ -1,0 +1,90 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Чат — DocDoc Reputation</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/ui/styles.css?v=3">
+  <link rel="stylesheet" href="/ui/pages.css?v=3">
+  <link rel="stylesheet" href="/ui/chat.css?v=3">
+</head>
+<body>
+  <div class="app-shell">
+    <header id="site-header" class="site-header"></header>
+
+    <main class="main-content">
+      <header class="page-header">
+        <h1>Репутационный чат</h1>
+        <p class="lead">
+          «Проанализируй отзывы по услуге …», «Сравни клиники по этой услуге», «Что говорят про врача …».
+          Контекст разговора сохраняется на этом устройстве — следующая реплика «а теперь по другой клинике» работает.
+        </p>
+      </header>
+
+      <div id="data-source-bar"></div>
+
+      <div class="help">
+        <strong>Что можно спросить:</strong>
+        <ul style="margin:6px 0 0;padding-left:1.2rem">
+          <li>«Проанализируй клинику <em>Союз</em>» — отчёт по одной сущности.</li>
+          <li>«Сравни <em>Авиценна</em> и <em>Союз</em> по услуге Тонзиллор» — сравнение со scope.</li>
+          <li>«Что говорят про <em>длинные очереди</em>?» — RAG-поиск по теме.</li>
+          <li>«А теперь по <em>другой клинике</em>» — наследует тип и интент предыдущей реплики.</li>
+        </ul>
+      </div>
+
+      <div id="chat-error" class="banner-error" role="alert"></div>
+
+      <section class="card">
+        <div class="chat-toolbar">
+          <div class="chat-toolbar-meta">
+            <span id="chat-session-label" class="muted">Новая сессия</span>
+            <span id="chat-route-label" class="chip" style="display:none"></span>
+          </div>
+          <div class="chat-toolbar-actions btn-row">
+            <select id="chat-system" class="chat-select" title="Принудительно выбрать систему">
+              <option value="">авто</option>
+              <option value="docdoc">docdoc</option>
+              <option value="general">general</option>
+            </select>
+            <input id="chat-city" type="text" class="chat-input-inline" placeholder="city_slug (напр. irk)">
+            <button type="button" class="btn btn-ghost" id="chat-reset">Очистить контекст</button>
+          </div>
+        </div>
+
+        <div id="chat-messages" class="chat-messages" role="log" aria-live="polite">
+          <div class="chat-empty muted">
+            Спросите что-нибудь, чтобы начать. Например, <em>«Проанализируй клинику Союз»</em>.
+          </div>
+        </div>
+
+        <form id="chat-form" class="chat-form" autocomplete="off">
+          <div class="form-field" style="flex:1;margin:0">
+            <label for="chat-input" class="sr-only">Сообщение</label>
+            <textarea
+              id="chat-input"
+              rows="2"
+              placeholder='Например: «Сравни клинику Союз и Авиценна по услуге Тонзиллор»'
+              required
+            ></textarea>
+          </div>
+          <button type="submit" class="btn btn-primary" id="chat-send">Отправить</button>
+        </form>
+      </section>
+
+      <section class="card mt-lg" id="chat-debug-card" hidden>
+        <h2>Отладка</h2>
+        <div class="muted" style="margin-bottom:8px">Сырые данные последнего ответа:</div>
+        <pre id="chat-debug" class="result-panel"></pre>
+      </section>
+    </main>
+
+    <footer id="site-footer" class="site-footer"></footer>
+  </div>
+  <script src="/ui/app.js?v=3"></script>
+  <script src="/ui/chat.js?v=3"></script>
+</body>
+</html>

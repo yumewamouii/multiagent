@@ -3,120 +3,206 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Multiagent — аналитика отзывов</title>
+  <title>DocDoc Reputation — аналитика отзывов клиник</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="/ui/styles.css">
+  <link rel="stylesheet" href="/ui/styles.css?v=4">
+  <link rel="stylesheet" href="/ui/pages.css?v=4">
 </head>
 <body>
   <div class="app-shell">
-    <header class="site-header">
-      <div class="header-inner">
-        <a href="/" class="brand" style="text-decoration:none;color:inherit">
-          <span class="brand-mark" aria-hidden="true">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
-              <path d="M4 19V5"/><path d="M4 19h16"/><path d="M8 17v-6"/><path d="M12 17V7"/><path d="M16 17v-3"/>
-            </svg>
-          </span>
-          Multiagent
-        </a>
-        <nav class="nav-desktop" aria-label="Основное меню">
-          <a href="/" data-nav="home">Главная</a>
-          <a href="/dashboard" data-nav="dashboard">Дашборд</a>
-          <a href="/product" data-nav="product">Инсайт по товару</a>
-          <a href="/search" data-nav="search">Поиск</a>
-          <a href="/queries" data-nav="queries">AI-запросы</a>
-        </nav>
-        <button type="button" class="menu-toggle" data-menu-toggle aria-expanded="false" aria-label="Открыть меню">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 6h16M4 12h16M4 18h16"/></svg>
-        </button>
-      </div>
-      <nav class="nav-mobile" data-menu-panel aria-label="Мобильное меню">
-        <a href="/" data-nav="home">Главная</a>
-        <a href="/dashboard" data-nav="dashboard">Дашборд</a>
-        <a href="/product" data-nav="product">Инсайт по товару</a>
-        <a href="/search" data-nav="search">Поиск</a>
-        <a href="/queries" data-nav="queries">AI-запросы</a>
-      </nav>
-    </header>
+    <header id="site-header" class="site-header"></header>
 
     <main class="main-content">
       <section class="hero">
         <div class="hero-grid">
           <div>
-            <h1>Аналитика отзывов</h1>
+            <h1>Узнайте, что пациенты думают о вашей клинике</h1>
             <p class="subtitle">
-              Единая панель для KPI по товарам, векторного поиска по базе знаний.
+              Сервис анализирует отзывы с DocDoc / СберЗдоровье и показывает:
+
+              что пациенты хвалят чаще всего;
+              на что жалуются;
+              какие проблемы влияют на репутацию;
+              какие сильные стороны можно использовать в рекламе и на сайте.
+
+              Получайте понятные отчёты по клиникам, врачам и услугам за несколько секунд.
             </p>
             <div class="hero-actions">
-              <a href="/dashboard"><button type="button" class="btn btn-primary">Открыть дашборд</button></a>
-              <a href="/queries"><button type="button" class="btn btn-secondary">Задать вопрос AI</button></a>
+              <a href="/chat"><button type="button" class="btn btn-primary">Открыть чат</button></a>
+              <a href="/dashboard"><button type="button" class="btn btn-secondary">Загрузить данные</button></a>
             </div>
-           
+            <p class="muted" id="health-line" style="margin-top:14px">Проверяем доступность API…</p>
           </div>
           <div class="preview-card">
             <div class="preview-card-inner">
-              <div class="feature-icon" aria-hidden="true">
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 20V10"/><path d="M18 20V4"/><path d="M6 20v-4"/></svg>
-              </div>
-              <h2 style="margin:0 0 10px;font-size:1.15rem">Что внутри</h2>
-              <ul class="muted" style="margin:0;padding-left:1.2rem;line-height:1.8">
-                <li>Фильтры по товару, источнику и датам</li>
-                <li>Экспорт инсайтов в CSV</li>
-                <li>Глубокий инсайт по одному SKU</li>
-              </ul>
+              <h2 style="margin:0 0 12px;font-size:1.1rem">Как это работает</h2>
+              <ol class="muted" style="margin:0;padding-left:1.25rem;line-height:1.8;font-size:.92rem">
+                <li><a href="/dashboard">Дашборд</a> загрузите отзывы из СберЗдоровье.</li>
+                <li>Система автоматически подготовит данные для анализа.</li>
+                <li><a href="/reputation">Анализ</a> Выберите клинику, врача или услугу.</li>
+                <li><a href="/compare">Сравнение</a>Получите отчёт с основными выводами.</li>
+                <li><a href="/chat">Чат</a> Задавайте дополнительные вопросы в чате.</li>
+              </ol>
             </div>
           </div>
+        </div>
+      </section>
+
+      <div id="data-source-bar"></div>
+
+      <section class="card mt-md" id="methodology">
+        <div style="display:flex;justify-content:space-between;align-items:flex-start;flex-wrap:wrap;gap:10px;margin-bottom:8px">
+          <h2 style="margin:0">Методика оценки качества</h2>
+          <a href="/methodology"><button type="button" class="btn btn-secondary" style="font-size:.85rem">Подробнее</button></a>
+        </div>
+        <p class="muted" style="margin:0 0 14px;font-size:.9rem">
+          Как измеряем ответы чата: выборка 40 запросов, экспертная шкала 0–2, сравнение
+          <code>use_rag=false</code> и <code>use_rag=true</code>.
+          Числа в таблице — шаблон; фактические метрики — после прогона и разметки CSV.
+        </p>
+        <div class="table-scroll">
+          <table class="data-table eval-table" aria-label="Метрики качества">
+            <thead>
+              <tr><th>Метрика</th><th>Без RAG</th><th>С RAG</th></tr>
+            </thead>
+            <tbody>
+              <tr><td>Релевантность</td><td class="eval-placeholder" title="заполнить после eval">—</td><td class="eval-placeholder">—</td></tr>
+              <tr><td>Галлюцинации</td><td class="eval-placeholder">—</td><td class="eval-placeholder">—</td></tr>
+              <tr><td>Полнота ответа</td><td class="eval-placeholder">—</td><td class="eval-placeholder">—</td></tr>
+            </tbody>
+          </table>
+        </div>
+        <p class="muted eval-example-caption" style="margin:12px 0 0;font-size:.82rem">
+          Пример для отчёта: 68% / 89% релевантность, 31% / 12% галлюцинации, 64% / 86% полнота.
+          Прогон: <code>python scripts/run_chat_eval.py</code> · документ <code>docs/evaluation.md</code>
+        </p>
+      </section>
+
+      <section class="card mt-md">
+        <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;margin-bottom:6px">
+          <h2 style="margin:0">Что есть в базе</h2>
+          <span class="muted" id="catalog-source-info" style="font-size:.82rem"></span>
+        </div>
+        <p class="muted" style="margin:0 0 14px">
+          Сейчас в системе доступны следующие данные для анализа.
+        </p>
+        <div class="grid grid-2 mt-md" id="catalog-tiles">
+          <div class="stat-tile" data-type="clinic">
+            <div class="stat-label">Клиник</div>
+            <div class="stat-value">…</div>
+            <div class="stat-sample muted">загружаем…</div>
+          </div>
+          <div class="stat-tile" data-type="service">
+            <div class="stat-label">Услуг</div>
+            <div class="stat-value">…</div>
+            <div class="stat-sample muted">загружаем…</div>
+          </div>
+          <div class="stat-tile" data-type="doctor">
+            <div class="stat-label">Врачей</div>
+            <div class="stat-value">…</div>
+            <div class="stat-sample muted">загружаем…</div>
+          </div>
+          <div class="stat-tile" data-type="category">
+            <div class="stat-label">Направлений</div>
+            <div class="stat-value">…</div>
+            <div class="stat-sample muted">загружаем…</div>
+          </div>
+        </div>
+        <div id="catalog-empty" class="help" style="display:none">
+          <strong>Данные ещё не загружены.</strong>
+          Перейдите в раздел «Загрузка данных» и импортируйте отзывы из DocDoc. После обработки вы сможете анализировать клиники, врачей и услуги.
         </div>
       </section>
 
       <div class="grid grid-3 mt-lg">
         <article class="card">
           <div class="feature-icon" aria-hidden="true">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
+          </div>
+          <h3>Чат-ассистент</h3>
+          <p class="muted" style="margin:0 0 10px">Спросите о любой клинике, враче или услуге обычными словами.</p>
+          <ul class="bullet-list" style="font-size:.85rem">
+            <li>«Что пациенты чаще всего хвалят в клинике Союз?»</li>
+            <li>«Сравни две клиники по отзывам»</li>
+            <li>«Какие жалобы встречаются чаще всего?»</li>
+          </ul>
+          <a href="/chat"><button type="button" class="btn btn-primary" style="width:100%;margin-top:8px">Открыть чат</button></a>
+        </article>
+        <article class="card">
+          <div class="feature-icon" aria-hidden="true">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/></svg>
           </div>
-          <h3>Дашборд</h3>
-          <p class="muted" style="margin:0 0 16px">Сводка запусков инсайтов, средняя уверенность модели и распределение тональности по рейтингам.</p>
-          <a href="/dashboard"><button type="button" class="btn btn-primary" style="width:100%">Перейти</button></a>
+          <h3>Анализ репутации</h3>
+          <p class="muted" style="margin:0 0 10px">Подробный отчёт по выбранной клинике, врачу или услуге.</p>
+          <ul class="bullet-list" style="font-size:.85rem">
+            <li>Количество отзывов и среднюю оценку</li>
+            <li>Основные жалобы пациентов</li>
+            <li>Сильные стороны</li>
+            <li>Рекомендации по улучшению сервиса</li>
+            <li>Примеры ответов на негативные отзывы</li>
+          </ul>
+          <a href="/reputation"><button type="button" class="btn btn-primary" style="width:100%;margin-top:8px">Запустить</button></a>
+        </article>
+        <article class="card">
+          <div class="feature-icon" aria-hidden="true">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 12h4l3-9 4 18 3-9h4"/></svg>
+          </div>
+          <h3>Сравнение бок о бок</h3>
+          <p class="muted" style="margin:0 0 10px">Сравните несколько клиник, врачей или услуг по отзывам пациентов.</p>
+          <ul class="bullet-list" style="font-size:.85rem">
+            <li>оценки и количество отзывов</li>
+            <li>преимущества и недостатки</li>
+            <li>отличия глазами пациентов</li>
+          </ul>
+          <a href="/compare"><button type="button" class="btn btn-primary" style="width:100%;margin-top:8px">Открыть</button></a>
         </article>
         <article class="card">
           <div class="feature-icon" aria-hidden="true">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg>
           </div>
-          <h3>Поиск по базе</h3>
-          <p class="muted" style="margin:0 0 16px">Семантический поиск чанков знаний: быстрый обзор релевантных отзывов без полного RAG-контура.</p>
-          <a href="/search"><button type="button" class="btn btn-primary" style="width:100%">Искать</button></a>
+          <h3>Поиск по отзывам</h3>
+          <p class="muted" style="margin:0 0 10px">Найдите отзывы по конкретной проблеме или теме.</p>
+          <ul class="bullet-list" style="font-size:.85rem">
+            <li>«Долгое ожидание приёма»</li>
+            <li>«Работа администраторов»</li>
+            <li>«Стоимость лечения»</li>
+          </ul>
+          <a href="/search"><button type="button" class="btn btn-primary" style="width:100%;margin-top:8px">Искать</button></a>
         </article>
         <article class="card">
           <div class="feature-icon" aria-hidden="true">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 3h7v7H3zM14 3h7v7h-7zM14 14h7v7h-7zM3 14h7v7H3z"/></svg>
           </div>
-          <h3>AI-запросы</h3>
-          <p class="muted" style="margin:0 0 16px">Синхронные и фоновые запросы + классический RAG с метриками и цитатами.</p>
-          <a href="/queries"><button type="button" class="btn btn-primary" style="width:100%">Открыть</button></a>
+          <h3>Управление данными</h3>
+          <p class="muted" style="margin:0 0 10px">Здесь можно загрузить новые отзывы и обновить данные для анализа.</p>
+          <ul class="bullet-list" style="font-size:.85rem">
+            <li>Импорт отзывов</li>
+            <li>Обновление данных</li>
+            <li>Просмотр клиник, врачей и услуг</li>
+          </ul>
+          <a href="/dashboard"><button type="button" class="btn btn-primary" style="width:100%;margin-top:8px">Перейти</button></a>
+        </article>
+        <article class="card">
+          <div class="feature-icon" aria-hidden="true">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/></svg>
+          </div>
+          <h3>OpenAPI</h3>
+          <p class="muted" style="margin:0 0 10px">Документация по интеграции сервиса через API.</p>
+          <ul class="bullet-list" style="font-size:.85rem">
+            <li><code>/docdoc/reputation/analyze</code></li>
+            <li><code>/docdoc/reputation/compare</code></li>
+            <li><code>/chat/query</code></li>
+          </ul>
+          <a href="/docs"><button type="button" class="btn btn-secondary" style="width:100%;margin-top:8px">Открыть Swagger</button></a>
         </article>
       </div>
     </main>
 
-    <footer class="site-footer">
-      <span id="footer-status">Multiagent UI</span> · <a href="/docs" id="api-docs-link">OpenAPI</a> · <a href="/health">/health</a>
-    </footer>
+    <footer id="site-footer" class="site-footer"></footer>
   </div>
-  <script src="/ui/app.js"></script>
-  <script>
-    (function () {
-      fetch("/health")
-        .then(function (r) { return r.json(); })
-        .then(function (d) {
-          document.getElementById("health-line").textContent = "API: " + (d.status || "ok");
-          document.getElementById("footer-status").textContent = "API доступен";
-        })
-        .catch(function () {
-          document.getElementById("health-line").textContent = "API недоступен — проверьте, что сервер запущен.";
-        });
-      document.getElementById("api-docs-link").href = "/docs";
-    })();
-  </script>
+  <script src="/ui/app.js?v=4"></script>
+  <script src="/ui/index.js?v=4"></script>
 </body>
 </html>

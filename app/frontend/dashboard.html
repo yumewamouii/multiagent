@@ -3,148 +3,144 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Дашборд — Multiagent</title>
+  <title>Дашборд — DocDoc Reputation</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="/ui/styles.css">
-  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+  <link rel="stylesheet" href="/ui/styles.css?v=3">
+  <link rel="stylesheet" href="/ui/pages.css?v=3">
 </head>
 <body>
   <div class="app-shell">
-    <header class="site-header">
-      <div class="header-inner">
-        <a href="/" class="brand" style="text-decoration:none;color:inherit">
-          <span class="brand-mark" aria-hidden="true">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
-              <path d="M4 19V5"/><path d="M4 19h16"/><path d="M8 17v-6"/><path d="M12 17V7"/><path d="M16 17v-3"/>
-            </svg>
-          </span>
-          Multiagent
-        </a>
-        <nav class="nav-desktop" aria-label="Основное меню">
-          <a href="/" data-nav="home">Главная</a>
-          <a href="/dashboard" data-nav="dashboard">Дашборд</a>
-          <a href="/product" data-nav="product">Инсайт по товару</a>
-          <a href="/search" data-nav="search">Поиск</a>
-          <a href="/queries" data-nav="queries">AI-запросы</a>
-        </nav>
-        <button type="button" class="menu-toggle" data-menu-toggle aria-expanded="false" aria-label="Открыть меню">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 6h16M4 12h16M4 18h16"/></svg>
-        </button>
-      </div>
-      <nav class="nav-mobile" data-menu-panel aria-label="Мобильное меню">
-        <a href="/" data-nav="home">Главная</a>
-        <a href="/dashboard" data-nav="dashboard">Дашборд</a>
-        <a href="/product" data-nav="product">Инсайт по товару</a>
-        <a href="/search" data-nav="search">Поиск</a>
-        <a href="/queries" data-nav="queries">AI-запросы</a>
-      </nav>
-    </header>
+    <header id="site-header" class="site-header"></header>
 
     <main class="main-content">
       <header class="page-header">
-        <h1>Дашборд инсайтов</h1>
-        <p class="lead">Фильтруйте запуски по товару, источнику и периоду. Смотрите KPI по отзывам и выгружайте отчёт в CSV.</p>
+        <h1>Дашборд ingestion</h1>
+        <p class="lead">
+          Сначала <strong>(1)</strong> запустите краул DocDoc — он соберёт услуги, клиники, врачей и отзывы.
+          Затем <strong>(2)</strong> загрузите JSON-чекпоинт в Postgres и <strong>(3)</strong> постройте RAG-индекс.
+          После этого «Анализ», «Сравнение» и «Чат» начнут работать.
+        </p>
       </header>
 
+      <div id="data-source-bar"></div>
       <div id="dash-error" class="banner-error" role="alert"></div>
 
       <section class="card">
-        <h2>Фильтры</h2>
-        <div class="form-grid">
-          <div class="form-field">
-            <label for="product">Товар (подстрока)</label>
-            <input id="product" type="text" placeholder="Например: Чайник" autocomplete="off">
-          </div>
-          <div class="form-field">
-            <label for="source">ID источника</label>
-            <input id="source" type="number" min="1" placeholder="Необязательно">
-          </div>
-          <div class="form-field">
-            <label for="date_from">Дата с</label>
-            <input id="date_from" type="datetime-local">
-          </div>
-          <div class="form-field">
-            <label for="date_to">Дата по</label>
-            <input id="date_to" type="datetime-local">
-          </div>
+        <h2>Что сейчас в данных</h2>
+        <p class="muted" style="margin:0 0 10px">Список ниже подгружается из выбранного источника. По нему работают подсказки на страницах «Анализ» и «Сравнение».</p>
+        <div class="form-row" style="margin-bottom:10px;gap:6px">
+          <button type="button" class="chip-btn" data-cat="clinic">Клиники</button>
+          <button type="button" class="chip-btn" data-cat="service">Услуги</button>
+          <button type="button" class="chip-btn" data-cat="doctor">Врачи</button>
+          <button type="button" class="chip-btn" data-cat="category">Направления</button>
+          <input id="cat-filter" type="text" placeholder="фильтр по подстроке" style="margin-left:auto;min-width:240px">
         </div>
-        <div class="btn-row" style="margin-top:18px">
-          <button type="button" class="btn btn-primary" id="load"><span id="load-label">Загрузить</span></button>
-          <button type="button" class="btn btn-secondary" id="export">Экспорт CSV</button>
-          <button type="button" class="btn btn-ghost" id="reset">Сбросить даты</button>
-        </div>
+        <div id="cat-table-wrap" style="overflow-x:auto"></div>
       </section>
 
-      <div class="grid grid-4 mt-lg">
-        <article class="card card-tight stat">
-          <span class="stat-label">Отзывов</span>
-          <span class="stat-value" id="review_count">—</span>
-          <span class="stat-hint">в выборке</span>
-        </article>
-        <article class="card card-tight stat">
-          <span class="stat-label">Средний рейтинг</span>
-          <span class="stat-value" id="avg_rating">—</span>
-          <span class="stat-hint">по звёздам</span>
-        </article>
-        <article class="card card-tight stat">
-          <span class="stat-label">Средняя уверенность</span>
-          <span class="stat-value" id="avg_confidence">—</span>
-          <span class="stat-hint">инсайты</span>
-        </article>
-        <article class="card card-tight stat">
-          <span class="stat-label">Запусков инсайтов</span>
-          <span class="stat-value" id="total_runs">—</span>
-          <span class="stat-hint">всего по фильтру</span>
-        </article>
-      </div>
-
       <div class="grid grid-2 mt-lg">
-        <section class="card chart-card">
-          <h3>Тональность по рейтингу</h3>
-          <p class="muted" style="font-size:0.85rem;margin-top:-8px;margin-bottom:12px">Доля положительных (≥4), отрицательных (≤2) и нейтральных отзывов.</p>
-          <canvas id="sentimentChart" aria-label="Диаграмма тональности"></canvas>
-        </section>
         <section class="card">
-          <h3>Быстрые ориентиры</h3>
-          <p class="muted" style="margin:0 0 12px;font-size:0.9rem">Доля негатива среди отзывов в выборке (по рейтингу ≤2).</p>
-          <p style="font-size:2rem;font-weight:700;margin:0" id="negative_ratio_big">—</p>
-          <p class="muted" style="margin-top:16px;font-size:0.9rem">Положительные (≥4): <strong id="positive_ratio_big">—</strong></p>
+          <h2>1. Краул DocDoc</h2>
+          <p class="muted" style="margin:0 0 10px">Скачивает услуги/клиники/докторов/отзывы с irk.docdoc.ru.</p>
+          <div class="help">
+            <strong>Параметры по умолчанию</strong> (быстрый старт): 20 услуг + 20 клиник + хабы /service/...,
+            режим в фоне. Для полного среза города поставьте лимиты <code>0</code> и подождите 20–40 минут.
+          </div>
+          <div class="form-grid">
+            <div class="form-field">
+              <label for="cr-base-url">Base URL</label>
+              <input id="cr-base-url" type="text" value="https://irk.docdoc.ru/">
+            </div>
+            <div class="form-field">
+              <label for="cr-max-services">Макс. услуг (0 = все)</label>
+              <input id="cr-max-services" type="number" value="20" min="0">
+            </div>
+            <div class="form-field">
+              <label for="cr-max-clinics">Макс. клиник</label>
+              <input id="cr-max-clinics" type="number" value="20" min="0">
+            </div>
+            <div class="form-field">
+              <label for="cr-max-doctors">Макс. профилей врачей</label>
+              <input id="cr-max-doctors" type="number" value="0" min="0">
+            </div>
+          </div>
+          <div class="form-row" style="margin-top:10px">
+            <label class="checkbox" title="заходить в карточки клиник"><input id="cr-fetch-clinics" type="checkbox" checked> карточки клиник</label>
+            <label class="checkbox" title="кликать «показать ещё» на странице услуги"><input id="cr-full-reviews" type="checkbox" checked> «показать ещё»</label>
+            <label class="checkbox" title="страница /order/reviews для каждой услуги"><input id="cr-dual-reviews" type="checkbox" checked> /order/reviews</label>
+            <label class="checkbox" title="хабы /service/stomatologiya и др."><input id="cr-discover-hubs" type="checkbox" checked> хабы услуг</label>
+            <label class="checkbox"><input id="cr-save-db" type="checkbox" checked> save_to_db</label>
+            <label class="checkbox" title="вернуть job_id сразу"><input id="cr-bg" type="checkbox" checked> в фоне</label>
+          </div>
+          <div class="btn-row" style="margin-top:14px">
+            <button type="button" class="btn btn-primary" id="cr-run">Запустить краул</button>
+            <button type="button" class="btn btn-secondary" id="cr-poll" disabled>Обновить статус</button>
+          </div>
+          <pre id="cr-result" class="result-panel" style="display:none;margin-top:14px"></pre>
+        </section>
+
+        <section class="card">
+          <h2>2. Загрузить JSON в БД</h2>
+          <p class="muted" style="margin:0 0 10px">После краула в фоне путь к чекпоинту приходит в статусе job. Этот шаг переносит его в PostgreSQL.</p>
+          <div class="help">
+            После клика «Обновить статус» слева, путь автоматически подставится сюда.
+          </div>
+          <div class="form-grid">
+            <div class="form-field" style="grid-column:1/-1">
+              <label for="ing-path">Путь к JSON</label>
+              <input id="ing-path" type="text" value="docdoc_crawl_checkpoint.json">
+            </div>
+            <label class="checkbox" style="grid-column:1/-1"><input id="ing-allow-partial" type="checkbox" checked> allow_partial (загрузить, даже если краул не дошёл до конца)</label>
+          </div>
+          <div class="btn-row" style="margin-top:14px">
+            <button type="button" class="btn btn-primary" id="ing-run">Загрузить в БД</button>
+          </div>
+          <pre id="ing-result" class="result-panel" style="display:none;margin-top:14px"></pre>
         </section>
       </div>
 
       <section class="card mt-lg">
-        <h2>История инсайтов</h2>
-        <div class="table-wrap">
-          <table class="table">
-            <thead>
-              <tr>
-                <th>Run</th>
-                <th>Товар</th>
-                <th>Источник</th>
-                <th>Уверенность</th>
-                <th>Дата</th>
-                <th>Кратко</th>
-              </tr>
-            </thead>
-            <tbody id="rows"></tbody>
-          </table>
+        <h2>3. RAG-индекс</h2>
+        <p class="muted" style="margin:0 0 10px">Строит векторные эмбеддинги отзывов / врачей / услуг и кладёт их в таблицу `docdoc_chunks`. После этого работают <a href="/search">поиск</a>, <a href="/reputation">анализ</a> и <a href="/chat">чат</a>.</p>
+        <div class="form-grid">
+          <div class="form-field">
+            <label for="rb-source">Источник</label>
+            <select id="rb-source">
+              <option value="auto" selected>auto (БД, при пустоте — JSON)</option>
+              <option value="db">только БД</option>
+              <option value="json">только JSON</option>
+            </select>
+          </div>
+          <div class="form-field">
+            <label for="rb-crawl-path">crawl_path (для json)</label>
+            <input id="rb-crawl-path" type="text" placeholder="docdoc_crawl_last.json">
+          </div>
+          <div class="form-field">
+            <label for="rb-city">city_slug</label>
+            <input id="rb-city" type="text" placeholder="irk">
+          </div>
+          <div class="form-field">
+            <label for="rb-source-id">source_id</label>
+            <input id="rb-source-id" type="number" min="0" placeholder="(опц.)">
+          </div>
         </div>
-        <div id="empty-table" class="empty-state" style="display:none">Нет записей по текущим фильтрам.</div>
-        <div class="pagination">
-          <span class="info" id="page-info"></span>
-          <button type="button" class="btn btn-secondary" id="prev-page" disabled>Назад</button>
-          <button type="button" class="btn btn-secondary" id="next-page" disabled>Вперёд</button>
+        <div class="form-row" style="margin-top:10px">
+          <label class="checkbox"><input id="rb-kind-review" type="checkbox" checked> review</label>
+          <label class="checkbox"><input id="rb-kind-doctor" type="checkbox" checked> doctor</label>
+          <label class="checkbox"><input id="rb-kind-service" type="checkbox" checked> service</label>
         </div>
+        <div class="btn-row" style="margin-top:14px">
+          <button type="button" class="btn btn-primary" id="rb-run">Построить индекс</button>
+        </div>
+        <pre id="rb-result" class="result-panel" style="display:none;margin-top:14px"></pre>
       </section>
     </main>
 
-    <footer class="site-footer">
-      Multiagent UI · <a href="/dashboard">Дашборд</a>
-    </footer>
+    <footer id="site-footer" class="site-footer"></footer>
   </div>
-  <script src="/ui/app.js"></script>
-  <script src="/ui/dashboard.js"></script>
+  <script src="/ui/app.js?v=3"></script>
+  <script src="/ui/dashboard.js?v=3"></script>
 </body>
 </html>

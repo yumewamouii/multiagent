@@ -1,0 +1,150 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Методика оценки — DocDoc Reputation</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/ui/styles.css?v=4">
+  <link rel="stylesheet" href="/ui/pages.css?v=4">
+  <script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
+</head>
+<body>
+  <div class="app-shell">
+    <header id="site-header" class="site-header"></header>
+
+    <main class="main-content methodology-page">
+      <section class="card">
+        <h1 style="margin:0 0 8px">Методика оценки качества системы</h1>
+        <p class="muted" style="margin:0 0 16px">
+          Полный текст также в репозитории: <code>docs/evaluation.md</code>.
+          Прогон выборки: <code>python scripts/run_chat_eval.py</code>.
+        </p>
+        <p class="help" style="margin:0">
+          <strong>Важно:</strong> проценты в примере таблицы ниже — иллюстрация формата отчёта.
+          Фактические значения получают после экспертной разметки CSV из скрипта прогона.
+        </p>
+      </section>
+
+      <section class="card mt-md">
+        <h2 style="margin:0 0 12px">Критерии (шкала 0–2)</h2>
+        <ul class="bullet-list muted" style="font-size:.9rem">
+          <li><strong>Релевантность</strong> — ответ по сути запроса и нужной сущности.</li>
+          <li><strong>Галлюцинации</strong> — 2 = только факты из отзывов/RAG; 0 = выдуманные утверждения.</li>
+          <li><strong>Полнота</strong> — охвачены ключевые аспекты (жалобы, плюсы, сравнение).</li>
+        </ul>
+        <p class="muted" style="margin:12px 0 0;font-size:.88rem">
+          Успешный ответ: релевантность = 2, галлюцинации = 2, полнота ≥ 1.
+        </p>
+      </section>
+
+      <section class="card mt-md">
+        <h2 style="margin:0 0 12px">Выборка и прогон</h2>
+        <p class="muted" style="margin:0 0 10px;font-size:.9rem">
+          40 запросов в <code>scripts/eval_queries.json</code> (анализ, сравнение, RAG, диалог).
+          Каждый запрос дважды: <code>use_rag=false</code> и <code>use_rag=true</code> → 80 строк в CSV.
+        </p>
+        <pre class="code-block">python scripts/run_chat_eval.py --base-url http://127.0.0.1:8000
+python scripts/run_chat_eval.py --aggregate eval_output/eval_scoring_filled.csv</pre>
+      </section>
+
+      <section class="card mt-md">
+        <h2 style="margin:0 0 12px">Таблица результатов (шаблон)</h2>
+        <div class="table-scroll">
+          <table class="data-table eval-table">
+            <thead>
+              <tr><th>Метрика</th><th>Без RAG</th><th>С RAG</th><th>Δ</th></tr>
+            </thead>
+            <tbody>
+              <tr><td>Релевантность</td><td class="eval-placeholder">—</td><td class="eval-placeholder">—</td><td>—</td></tr>
+              <tr><td>Галлюцинации</td><td class="eval-placeholder">—</td><td class="eval-placeholder">—</td><td>—</td></tr>
+              <tr><td>Полнота ответа</td><td class="eval-placeholder">—</td><td class="eval-placeholder">—</td><td>—</td></tr>
+              <tr><td>Accuracy (успешные)</td><td class="eval-placeholder">—</td><td class="eval-placeholder">—</td><td>—</td></tr>
+            </tbody>
+          </table>
+        </div>
+        <p class="muted eval-example-caption" style="margin:12px 0 0;font-size:.82rem">
+          Пример оформления в отчёте (не измерено системой): релевантность 68% → 89%, галлюцинации 31% → 12%, полнота 64% → 86%.
+        </p>
+      </section>
+
+      <section class="card mt-md">
+        <h2 style="margin:0 0 12px">Формулы</h2>
+        <p class="muted" style="margin:0;font-size:.88rem;line-height:1.7">
+          Accuracy = (число успешных ответов) / N × 100%.<br>
+          Релевантность_% = среднее(score_relevance / 2) × 100%.<br>
+          Галлюцинации_% = доля ответов с score_halluc &lt; 2.<br>
+          Precision = TP / (TP + FP), Recall = TP / (TP + FN) для бинарного «успех».
+        </p>
+      </section>
+
+      <section class="card mt-md">
+        <h2 style="margin:0 0 12px">Обработка запроса (чат)</h2>
+        <div class="mermaid-wrap">
+          <pre class="mermaid">
+sequenceDiagram
+    actor User as Пользователь
+    participant UI as UI /chat
+    participant API as POST /chat/query
+    participant Top as Top-роутер
+    participant Doc as DocDoc
+    participant Gen as MultiAgent
+
+    User->>UI: запрос
+    UI->>API: query, use_rag, session_id
+    API->>Top: docdoc vs general
+    alt DocDoc
+        API->>Doc: analyze / compare / RAG
+        Doc-->>API: answer
+    else general
+        API->>Gen: router → researcher → critic → summarizer
+        Gen-->>API: answer
+    end
+    API-->>UI: JSON
+          </pre>
+        </div>
+      </section>
+
+      <section class="card mt-md">
+        <h2 style="margin:0 0 12px">DocDoc: анализ с RAG</h2>
+        <div class="mermaid-wrap">
+          <pre class="mermaid">
+sequenceDiagram
+    participant R as Router
+    participant DB as БД / JSON
+    participant RAG as docdoc_chunks
+    participant LLM as LLM
+    R->>DB: отзывы + метрики
+    opt use_rag
+        R->>RAG: hybrid search
+        RAG-->>R: сниппеты
+    end
+    R->>LLM: промпт
+    LLM-->>R: отчёт
+          </pre>
+        </div>
+      </section>
+
+      <p class="mt-md">
+        <a href="/"><button type="button" class="btn btn-secondary">На главную</button></a>
+      </p>
+    </main>
+
+    <footer id="site-footer" class="site-footer"></footer>
+  </div>
+  <script src="/ui/app.js?v=4"></script>
+  <script>
+    (function () {
+      "use strict";
+      document.getElementById("site-header").innerHTML = window.MultiagentUI.buildHeader("");
+      document.getElementById("site-footer").innerHTML = window.MultiagentUI.buildFooter();
+      window.MultiagentUI.attachMenuToggle();
+      if (window.mermaid) {
+        mermaid.initialize({ startOnLoad: true, theme: "dark", securityLevel: "loose" });
+      }
+    })();
+  </script>
+</body>
+</html>

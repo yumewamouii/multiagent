@@ -1,0 +1,189 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Сравнение — DocDoc Reputation</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/ui/styles.css?v=3">
+  <link rel="stylesheet" href="/ui/pages.css?v=3">
+</head>
+<body>
+  <div class="app-shell">
+    <header id="site-header" class="site-header"></header>
+
+    <main class="main-content">
+      <header class="page-header">
+        <h1>Сравнение бок о бок</h1>
+        <p class="lead">
+          Сравните 2–6 клиник, услуг, направлений или врачей одним LLM-вызовом.
+          На выходе — таблица метрик, победители, сильные/слабые стороны и USP по каждой
+          (готовый материал для лендинга и рекламы).
+        </p>
+      </header>
+
+      <div id="data-source-bar"></div>
+
+      <div class="help">
+        <strong>Как пользоваться:</strong> выберите тип, начните вводить имена в поля «Сущность» —
+        работает автодополнение из ваших данных. Для каждой строки можно нажать на одну из
+        карточек ниже. Scope (опционально) сужает выборку отзывов: например, при сравнении
+        клиник укажите <code>service: Тонзиллор</code> — и система оставит у каждой только
+        отзывы по этой услуге.
+      </div>
+
+      <div id="cmp-error" class="banner-error" role="alert"></div>
+      <div id="cmp-info" class="banner-info" role="status"></div>
+
+      <section class="card">
+        <h2>Параметры</h2>
+
+        <div class="form-grid">
+          <div class="form-field">
+            <label for="cmp-mode">Режим</label>
+            <select id="cmp-mode">
+              <option value="single" selected>Однотипные</option>
+              <option value="mixed">Mixed (разные типы)</option>
+            </select>
+          </div>
+          <div class="form-field" id="cmp-common-type-field">
+            <label for="cmp-common-type">Общий тип</label>
+            <select id="cmp-common-type">
+              <option value="clinic" selected>clinic — клиника</option>
+              <option value="service">service — услуга</option>
+              <option value="category">category — направление</option>
+              <option value="doctor">doctor — врач</option>
+            </select>
+          </div>
+          <div class="form-field">
+            <label for="cmp-city">city_slug</label>
+            <input id="cmp-city" type="text" placeholder="irk">
+          </div>
+        </div>
+
+        <div class="report-section">
+          <h3 style="margin-bottom:6px">Сущности (от 2 до 6)</h3>
+          <datalist id="cmp-options"></datalist>
+          <div id="cmp-entities"></div>
+          <div class="btn-row" style="margin-top:6px">
+            <button type="button" class="btn btn-ghost" id="cmp-add">+ ещё одна</button>
+          </div>
+        </div>
+
+        <div class="report-section">
+          <h3 style="margin-bottom:6px">Подсказки <span class="muted" id="cmp-sugg-meta"></span></h3>
+          <p class="muted" style="margin:0 0 6px;font-size:.82rem">Клик добавит сущность в первое пустое поле выше.</p>
+          <div id="cmp-suggestions" class="suggest-grid"></div>
+        </div>
+
+        <details class="report-section">
+          <summary class="muted" style="cursor:pointer;font-size:.85rem">Scope: сравнить в контексте</summary>
+          <p class="muted" style="margin:6px 0 10px;font-size:.85rem">
+            Заполните одно поле — отзывы по каждой сущности будут отфильтрованы.
+            Полезно для USP: «сравни клиники по конкретной услуге».
+          </p>
+          <div class="form-grid">
+            <div class="form-field">
+              <label for="scope-service">scope.service</label>
+              <input id="scope-service" type="text" list="scope-service-options" placeholder='напр. Промывание миндалин Тонзиллор'>
+              <datalist id="scope-service-options"></datalist>
+            </div>
+            <div class="form-field">
+              <label for="scope-category">scope.category</label>
+              <input id="scope-category" type="text" list="scope-category-options" placeholder='напр. ЛОР'>
+              <datalist id="scope-category-options"></datalist>
+            </div>
+            <div class="form-field">
+              <label for="scope-clinic">scope.clinic</label>
+              <input id="scope-clinic" type="text" list="scope-clinic-options">
+              <datalist id="scope-clinic-options"></datalist>
+            </div>
+            <div class="form-field">
+              <label for="scope-doctor">scope.doctor</label>
+              <input id="scope-doctor" type="text" list="scope-doctor-options">
+              <datalist id="scope-doctor-options"></datalist>
+            </div>
+          </div>
+        </details>
+
+        <details class="report-section">
+          <summary class="muted" style="cursor:pointer;font-size:.85rem">Тонкая настройка</summary>
+          <div class="form-grid" style="margin-top:10px">
+            <div class="form-field">
+              <label for="cmp-data-source">data_source</label>
+              <select id="cmp-data-source">
+                <option value="auto" selected>auto</option>
+                <option value="db">db</option>
+                <option value="json">json</option>
+              </select>
+            </div>
+            <div class="form-field" style="grid-column:span 2">
+              <label for="cmp-crawl-path">crawl_path</label>
+              <input id="cmp-crawl-path" type="text" placeholder="docdoc_crawl_last.json">
+            </div>
+            <div class="form-field">
+              <label for="cmp-rag-top-k">RAG top_k</label>
+              <input id="cmp-rag-top-k" type="number" value="6" min="0" max="30">
+            </div>
+            <div class="form-field">
+              <label for="cmp-reviews-per-entity">reviews_per_entity</label>
+              <input id="cmp-reviews-per-entity" type="number" value="10" min="2" max="30">
+            </div>
+          </div>
+          <div class="form-row" style="margin-top:10px">
+            <label class="checkbox"><input id="cmp-use-rag" type="checkbox" checked> use_rag</label>
+            <label class="checkbox"><input id="cmp-use-llm" type="checkbox" checked> use_llm</label>
+          </div>
+        </details>
+
+        <div class="btn-row" style="margin-top:14px">
+          <button type="button" class="btn btn-primary" id="cmp-run">Сравнить</button>
+        </div>
+      </section>
+
+      <section class="card mt-lg" id="cmp-loading" style="display:none">
+        <p class="muted" style="margin:0"><span class="spinner" aria-hidden="true"></span> Тянем данные по каждой сущности и зовём LLM. Обычно 15–60 секунд.</p>
+      </section>
+
+      <section class="card mt-lg" id="cmp-result" style="display:none">
+        <h2>Результат</h2>
+        <div id="cmp-summary" class="report-section"></div>
+        <div id="cmp-winners" class="report-section"></div>
+
+        <div class="report-section">
+          <h3>Метрики</h3>
+          <div id="cmp-metrics-table-wrap" style="overflow-x:auto"></div>
+        </div>
+
+        <div class="report-section">
+          <h3>Сильные / слабые стороны</h3>
+          <div id="cmp-per-entity" class="compare-grid"></div>
+        </div>
+
+        <div class="report-section">
+          <h3>Общие жалобы</h3>
+          <ul id="cmp-shared" class="bullet-list"></ul>
+        </div>
+
+        <div class="report-section">
+          <h3>Угол для рекламы / лендинга</h3>
+          <p id="cmp-ad" class="muted"></p>
+        </div>
+
+        <div class="report-section" id="cmp-warnings"></div>
+
+        <details class="report-section">
+          <summary class="muted" style="cursor:pointer">Сырые данные ответа</summary>
+          <pre id="cmp-raw" class="result-panel" style="margin-top:10px"></pre>
+        </details>
+      </section>
+    </main>
+
+    <footer id="site-footer" class="site-footer"></footer>
+  </div>
+  <script src="/ui/app.js?v=4"></script>
+  <script src="/ui/compare.js?v=4"></script>
+</body>
+</html>

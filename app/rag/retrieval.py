@@ -10,7 +10,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import selectinload
 
 from app.core.db import SessionLocal
-from app.models.orm import KnowledgeChunk, Review
+from app.models.orm import KnowledgeChunk, Review, TelegramChatAnalysis
 from app.rag.embedding import create_embedding
 
 
@@ -214,3 +214,73 @@ def hybrid_rerank_chunks(
 
     out.sort(key=lambda item: item[1], reverse=True)
     return out[:top_k]
+
+
+async def semantic_search_telegram_analyses(
+    query: str,
+    top_k: int = 8,
+    export_key: str | None = None,
+    market_research_only: bool = True,
+    exclude_spam: bool = True,
+) -> list[TelegramChatAnalysis]:
+    query_embedding = create_embedding(f"query: {query}")
+    if query_embedding is None:
+        return []
+    return await _semantic_search_telegram_with_embedding(
+        query_embedding,
+        top_k=top_k,
+        export_key=export_key,
+        market_research_only=market_research_only,
+        exclude_spam=exclude_spam,
+    )
+
+
+async def _semantic_search_telegram_with_embedding(
+    query_embedding: list[float],
+    *,
+    top_k: int,
+    export_key: str | None,
+    market_research_only: bool,
+    exclude_spam: bool,
+) -> list[TelegramChatAnalysis]:
+    def db_query():
+        with SessionLocal() as db:
+            stmt = select(TelegramChatAnalysis).where(TelegramChatAnalysis.embedding.isnot(None))
+            if export_key:
+                stmt = stmt.where(TelegramChatAnalysis.export_key == export_key)
+            if market_research_only:
+                stmt = stmt.where(TelegramChatAnalysis.market_research_interest.is_(True))
+            if exclude_spam:
+                stmt = stmt.where(TelegramChatAnalysis.spam_or_ad.is_(False))
+            stmt = stmt.order_by(
+                TelegramChatAnalysis.embedding.cosine_distance(query_embedding)
+            ).limit(top_k)
+            return db.execute(stmt).scalars().all()
+
+    return await asyncio.to_thread(db_query)
+
+
+async def semantic_search_telegram_analyses_scored(
+    query: str,
+    top_k: int = 8,
+    export_key: str | None = None,
+    market_research_only: bool = True,
+    exclude_spam: bool = True,
+) -> tuple[list[float] | None, list[tuple[TelegramChatAnalysis, float]]]:
+    query_embedding = create_embedding(f"query: {query}")
+    if query_embedding is None:
+        return None, []
+
+    rows = await _semantic_search_telegram_with_embedding(
+        query_embedding,
+        top_k=top_k,
+        export_key=export_key,
+        market_research_only=market_research_only,
+        exclude_spam=exclude_spam,
+    )
+    scored: list[tuple[TelegramChatAnalysis, float]] = []
+    for row in rows:
+        dv = _as_float_list(getattr(row, "embedding", None))
+        sim = cosine_similarity_score(query_embedding, dv) if dv else 0.0
+        scored.append((row, sim))
+    return query_embedding, scored

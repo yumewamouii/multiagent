@@ -1,0 +1,181 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Анализ репутации — DocDoc Reputation</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/ui/styles.css?v=4">
+  <link rel="stylesheet" href="/ui/pages.css?v=4">
+</head>
+<body>
+  <div class="app-shell">
+    <header id="site-header" class="site-header"></header>
+
+    <main class="main-content">
+      <header class="page-header">
+        <h1>Анализ репутации</h1>
+        <p class="lead">
+          Глубокий разбор одной клиники / услуги / направления / врача:
+          метрики, executive-summary, что чинить в сервисе, что добавить на лендинг,
+          угол для рекламы и черновики ответов на риск-отзывы.
+        </p>
+      </header>
+
+      <div id="data-source-bar"></div>
+
+      <div class="help">
+        <strong>Как пользоваться:</strong>
+        выберите тип (1) → начните вводить имя в поле «Сущность» — появятся подсказки из ваших данных,
+        либо нажмите на одну из карточек ниже. Для большинства сценариев остальные параметры можно не трогать.
+      </div>
+
+      <div id="rep-error" class="banner-error" role="alert"></div>
+      <div id="rep-info" class="banner-info" role="status"></div>
+
+      <section class="card">
+        <h2>Параметры</h2>
+        <div class="form-grid">
+          <div class="form-field">
+            <label for="rep-type">Тип сущности</label>
+            <select id="rep-type">
+              <option value="clinic" selected>clinic — клиника</option>
+              <option value="service">service — услуга</option>
+              <option value="category">category — направление</option>
+              <option value="doctor">doctor — врач</option>
+            </select>
+          </div>
+          <div class="form-field" style="grid-column:span 2">
+            <label for="rep-entity">Имя или подстрока</label>
+            <input id="rep-entity" type="text" list="rep-entity-options" placeholder='начните вводить — увидите варианты'>
+            <datalist id="rep-entity-options"></datalist>
+          </div>
+          <div class="form-field">
+            <label for="rep-city">city_slug</label>
+            <input id="rep-city" type="text" placeholder="irk">
+          </div>
+        </div>
+
+        <div class="report-section">
+          <h3 style="margin-bottom:6px">Подсказки из ваших данных <span class="muted" id="rep-sugg-meta"></span></h3>
+          <div id="rep-suggestions" class="suggest-grid"></div>
+        </div>
+
+        <div class="report-section">
+          <h3 style="margin-bottom:6px">Готовые сценарии</h3>
+          <div class="suggest-grid">
+            <button type="button" class="chip-btn" data-preset="positive">Что любят пациенты</button>
+            <button type="button" class="chip-btn" data-preset="problems">Что раздражает</button>
+            <button type="button" class="chip-btn" data-preset="ad">Что использовать в рекламе</button>
+            <button type="button" class="chip-btn" data-preset="risk">Риск-отзывы без ответа</button>
+          </div>
+          <p class="muted" style="font-size:.8rem;margin:6px 0 0">Сценарии лишь подкручивают параметры запроса — отчёт всё равно покажет всё.</p>
+        </div>
+
+        <details class="report-section">
+          <summary class="muted" style="cursor:pointer;font-size:.85rem">Тонкая настройка</summary>
+          <div class="form-grid" style="margin-top:10px">
+            <div class="form-field">
+              <label for="rep-rag-top-k">RAG top_k</label>
+              <input id="rep-rag-top-k" type="number" value="12" min="0" max="50">
+            </div>
+            <div class="form-field">
+              <label for="rep-reviews-in-prompt">reviews_in_prompt</label>
+              <input id="rep-reviews-in-prompt" type="number" value="18" min="3" max="60">
+            </div>
+            <div class="form-field">
+              <label for="rep-risk-count">risk_reviews_count</label>
+              <input id="rep-risk-count" type="number" value="5" min="1" max="20">
+            </div>
+            <div class="form-field">
+              <label for="rep-data-source">data_source</label>
+              <select id="rep-data-source">
+                <option value="auto" selected>auto</option>
+                <option value="db">db</option>
+                <option value="json">json</option>
+              </select>
+            </div>
+            <div class="form-field" style="grid-column:span 2">
+              <label for="rep-crawl-path">crawl_path (для json)</label>
+              <input id="rep-crawl-path" type="text" placeholder="docdoc_crawl_last.json">
+            </div>
+          </div>
+          <div class="form-row" style="margin-top:10px">
+            <label class="checkbox"><input id="rep-use-rag" type="checkbox" checked> use_rag</label>
+            <label class="checkbox"><input id="rep-use-llm" type="checkbox" checked> use_llm</label>
+            <label class="checkbox"><input id="rep-gen-replies" type="checkbox" checked> generate_reply_drafts</label>
+          </div>
+        </details>
+
+        <div class="btn-row" style="margin-top:14px">
+          <button type="button" class="btn btn-primary" id="rep-run">Анализировать</button>
+        </div>
+      </section>
+
+      <section class="card mt-lg" id="rep-loading" style="display:none">
+        <p class="muted" style="margin:0"><span class="spinner" aria-hidden="true"></span> Считаем метрики, тянем RAG и зовём LLM. Обычно занимает 10–40 секунд.</p>
+      </section>
+
+      <section class="card mt-lg" id="rep-result" style="display:none">
+        <h2 id="rep-title">Отчёт</h2>
+        <div id="rep-summary" class="summary-grid"></div>
+
+        <div id="rep-exec" class="report-section"></div>
+
+        <div class="grid grid-2 mt-md">
+          <div class="report-section">
+            <h3>Что ценят пациенты</h3>
+            <ul id="rep-praises" class="bullet-list"></ul>
+          </div>
+          <div class="report-section">
+            <h3>Жалобы</h3>
+            <ul id="rep-complaints" class="bullet-list"></ul>
+          </div>
+          <div class="report-section">
+            <h3>Что починить в сервисе</h3>
+            <ul id="rep-improvements" class="bullet-list"></ul>
+          </div>
+          <div class="report-section">
+            <h3>Что добавить на страницу</h3>
+            <ul id="rep-landing" class="bullet-list"></ul>
+          </div>
+        </div>
+
+        <div class="report-section">
+          <h3>Угол для рекламы</h3>
+          <p id="rep-ad" class="muted"></p>
+        </div>
+        <div class="report-section">
+          <h3>Целевая аудитория</h3>
+          <p id="rep-audience" class="muted"></p>
+        </div>
+        <div class="report-section">
+          <h3>Риск-темы</h3>
+          <ul id="rep-risk-topics" class="bullet-list"></ul>
+        </div>
+
+        <div class="report-section">
+          <h3>Риск-отзывы</h3>
+          <div id="rep-risk-reviews"></div>
+        </div>
+
+        <div class="report-section" id="rep-replies-block" style="display:none">
+          <h3>Черновики ответов клиники</h3>
+          <div id="rep-replies"></div>
+        </div>
+
+        <details class="report-section">
+          <summary class="muted" style="cursor:pointer">Сырые данные ответа</summary>
+          <pre id="rep-raw" class="result-panel" style="margin-top:10px"></pre>
+        </details>
+      </section>
+    </main>
+
+    <footer id="site-footer" class="site-footer"></footer>
+  </div>
+  <script src="/ui/app.js?v=4"></script>
+  <script src="/ui/reputation.js?v=4"></script>
+</body>
+</html>

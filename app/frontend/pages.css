@@ -1,0 +1,373 @@
+/* DocDoc Reputation — общие стили для дашборда / анализа / сравнения / поиска. */
+
+.mt-md { margin-top: 18px; }
+
+.chip {
+  display: inline-flex;
+  align-items: center;
+  padding: 2px 10px;
+  border-radius: 999px;
+  font-size: 0.72rem;
+  font-weight: 600;
+  background: var(--accent-dim);
+  color: var(--text);
+  border: 1px solid var(--border);
+  letter-spacing: 0.02em;
+}
+
+.form-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 14px;
+  align-items: center;
+}
+
+.checkbox {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 0.85rem;
+  color: var(--text);
+  cursor: pointer;
+  user-select: none;
+}
+
+.checkbox input[type="checkbox"] {
+  width: 14px;
+  height: 14px;
+  accent-color: var(--accent);
+  margin: 0;
+}
+
+.data-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.88rem;
+}
+
+.data-table th,
+.data-table td {
+  padding: 8px 10px;
+  border-bottom: 1px solid var(--border);
+  text-align: left;
+  vertical-align: top;
+}
+
+.data-table th {
+  font-weight: 600;
+  color: var(--text-muted);
+  background: var(--surface-elevated);
+  position: sticky;
+  top: 0;
+}
+
+.data-table tbody tr:hover {
+  background: var(--accent-dim);
+}
+
+.data-table td.num,
+.data-table th.num {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+.summary-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+  gap: 12px;
+  margin: 10px 0;
+}
+
+.kpi-card {
+  background: var(--surface-elevated);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  padding: 12px 14px;
+}
+
+.kpi-card .kpi-label {
+  font-size: 0.75rem;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.kpi-card .kpi-value {
+  font-size: 1.5rem;
+  font-weight: 700;
+  margin-top: 4px;
+}
+
+.kpi-card .kpi-value.is-good { color: var(--good); }
+.kpi-card .kpi-value.is-warn { color: var(--warn); }
+.kpi-card .kpi-value.is-bad { color: var(--bad); }
+
+.bullet-list {
+  margin: 6px 0;
+  padding-left: 1.2rem;
+  line-height: 1.7;
+}
+
+.bullet-list li { margin-bottom: 4px; }
+
+.report-section {
+  margin-top: 14px;
+}
+
+.report-section h3 {
+  font-size: 0.95rem;
+  margin: 0 0 6px;
+  color: var(--text);
+}
+
+.entity-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 8px;
+}
+
+.entity-row select,
+.entity-row input {
+  flex: 1;
+}
+
+.entity-row .btn-ghost {
+  padding: 4px 10px;
+  font-size: 0.85rem;
+}
+
+.compare-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+  gap: 14px;
+  margin-top: 14px;
+}
+
+.compare-card {
+  background: var(--surface-elevated);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  padding: 14px 16px;
+}
+
+.compare-card h4 {
+  margin: 0 0 8px;
+  font-size: 1rem;
+  word-break: break-word;
+}
+
+.snippet {
+  background: var(--surface-elevated);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  padding: 10px 12px;
+  margin-bottom: 10px;
+}
+
+.snippet-title {
+  font-weight: 600;
+  margin-bottom: 4px;
+}
+
+.snippet-meta {
+  font-size: 0.75rem;
+  color: var(--text-muted);
+  margin-top: 6px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.tag {
+  display: inline-flex;
+  align-items: center;
+  padding: 2px 8px;
+  border-radius: 999px;
+  font-size: 0.7rem;
+  background: var(--accent-dim);
+  border: 1px solid var(--border);
+}
+
+.winner-badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 2px 8px;
+  border-radius: 999px;
+  font-size: 0.7rem;
+  font-weight: 600;
+  background: rgba(62, 232, 181, 0.18);
+  color: var(--good);
+  border: 1px solid rgba(62, 232, 181, 0.4);
+  margin-left: 6px;
+}
+
+/* ---- Data Source Bar (под шапкой) ---- */
+
+.ds-bar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 14px;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 14px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  margin: 12px 0 18px;
+}
+
+.ds-bar-title {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 0.85rem;
+}
+
+.ds-bar-row {
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+}
+
+.ds-bar input,
+.ds-bar select {
+  background: var(--surface-elevated);
+  color: var(--text);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  padding: 6px 10px;
+  font-size: 0.85rem;
+}
+
+.ds-bar input { min-width: 200px; }
+
+/* ---- Suggestions / quick-pick chips ---- */
+
+.suggest-grid {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 6px;
+}
+
+.chip-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 10px;
+  border-radius: 999px;
+  border: 1px solid var(--border);
+  background: var(--surface-elevated);
+  color: var(--text);
+  font-size: 0.78rem;
+  cursor: pointer;
+  transition: background var(--transition), border-color var(--transition);
+}
+
+.chip-btn:hover {
+  background: var(--accent-dim);
+  border-color: var(--border-strong);
+}
+
+.chip-btn .muted {
+  font-size: 0.72rem;
+  opacity: 0.7;
+}
+
+/* ---- Help-block (примеры, инструкции) ---- */
+
+.help {
+  background: rgba(124, 108, 255, 0.07);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  padding: 12px 14px;
+  font-size: 0.86rem;
+  color: var(--text-muted);
+  margin: 10px 0;
+}
+
+.help strong { color: var(--text); }
+.help code {
+  background: var(--surface-elevated);
+  padding: 1px 6px;
+  border-radius: 4px;
+  font-size: 0.82em;
+}
+
+/* ---- Stat tiles на главной ---- */
+
+.stat-tile {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  padding: 16px 18px;
+  text-align: left;
+}
+
+.stat-tile .stat-label {
+  font-size: 0.78rem;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.stat-tile .stat-value {
+  font-size: 1.8rem;
+  font-weight: 700;
+  margin-top: 4px;
+}
+
+.stat-tile .stat-sample {
+  margin-top: 6px;
+  font-size: 0.78rem;
+  color: var(--text-muted);
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+/* ---- Методика оценки (главная + /methodology) ---- */
+
+.methodology-page h2 {
+  font-size: 1.05rem;
+}
+
+.eval-table td.eval-placeholder {
+  color: var(--text-muted);
+  font-style: italic;
+}
+
+.eval-example-caption {
+  border-left: 3px solid var(--accent);
+  padding-left: 10px;
+}
+
+.table-scroll {
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+}
+
+.code-block {
+  margin: 0;
+  padding: 12px 14px;
+  background: var(--surface-elevated);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  font-size: 0.82rem;
+  line-height: 1.5;
+  overflow-x: auto;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.mermaid-wrap {
+  overflow-x: auto;
+  padding: 8px 0;
+}
+
+.mermaid-wrap .mermaid {
+  background: transparent;
+}

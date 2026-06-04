@@ -498,7 +498,6 @@ async def rag_answer(
     )
     retrieved = dedupe_chunks_by_review(vector_candidates + keyword_candidates)
 
-    # 2) rerank: cosine similarity(query, chunk_embedding) + lexical + слабые rank-бонусы
     vector_rank_by_review = {c.review_id: idx for idx, c in enumerate(vector_candidates)}
     keyword_rank_by_review = {c.review_id: idx for idx, c in enumerate(keyword_candidates)}
     query_embedding = create_embedding(f"query: {query}")
@@ -518,7 +517,7 @@ async def rag_answer(
         for chunk, _, detail in ranked
     }
 
-    # 3) generate: grounded answer with citations
+
     context = _build_context(reranked)
     answer = _generate_grounded_answer(query=query, context=context)
 
